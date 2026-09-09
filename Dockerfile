@@ -6,7 +6,7 @@
 # node:24-alpine and not the host's node: this stage only has to run Vite, and
 # pinning it here means the image never depends on what a developer's machine
 # happens to have installed.
-FROM node:24-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 # package files first, so a source-only change reuses the install layer.
