@@ -32,6 +32,18 @@ updates:
     groups:
       frontend-dependencies:
         patterns: ['*']
+    ignore:
+      # Hold typescript on the 5.x line. `make api-schema` regenerates the
+      # typed client with openapi-typescript, which drives the TypeScript
+      # *compiler API* (ts.factory). The typescript 7.x package is the native
+      # port and ships no compiler API yet -- `ts.factory` is undefined, so the
+      # generator dies and the api-schema job fails. openapi-typescript 7.13.0
+      # (the latest) still declares `peerDependencies: typescript ^5.x`.
+      # TS 7 also turns `strict` on by default, which tsconfig.app.json does
+      # not set, so `tsc -b` fails on top of that. Lift this once
+      # openapi-typescript supports TS 7.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
