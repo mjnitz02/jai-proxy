@@ -48,7 +48,7 @@ move as long as you set the same one there.
 
 ### Remote (unraid)
 
-Pushing to `main` publishes `ghcr.io/enchantedrobot/jai-proxy` — `linux/amd64`,
+Pushing to `main` publishes `ghcr.io/mjnitz02/jai-proxy` — `linux/amd64`,
 `:latest` plus `:sha-<short>` (`.github/workflows/publish.yml`). A server pulls
 that image rather than building:
 

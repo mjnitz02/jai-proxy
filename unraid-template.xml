@@ -11,10 +11,10 @@
 -->
 <Container version="2">
   <Name>jai-proxy</Name>
-  <Repository>ghcr.io/enchantedrobot/jai-proxy:latest</Repository>
-  <Registry>https://github.com/EnchantedRobot/jai-proxy/pkgs/container/jai-proxy</Registry>
-  <Project>https://github.com/EnchantedRobot/jai-proxy</Project>
-  <Support>https://github.com/EnchantedRobot/jai-proxy/issues</Support>
+  <Repository>ghcr.io/mjnitz02/jai-proxy:latest</Repository>
+  <Registry>https://github.com/mjnitz02/jai-proxy/pkgs/container/jai-proxy</Registry>
+  <Project>https://github.com/mjnitz02/jai-proxy</Project>
+  <Support>https://github.com/mjnitz02/jai-proxy/issues</Support>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>sh</Shell>

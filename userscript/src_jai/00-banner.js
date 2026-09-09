@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         jai-proxy bridge
-// @namespace    https://github.com/EnchantedRobot/jai-proxy
+// @namespace    https://github.com/mjnitz02/jai-proxy
 // @version      0.10.0
 // @description  Thin bridge: relays JanitorAI chat completions through a local jai-proxy server (which answers them locally), shows a connection pill, and exports a character as a V3 card PNG via JanitorAI's clean JSON API (no DOM scraping). Card assembly lives server-side.
 // @match        https://janitorai.com/*
