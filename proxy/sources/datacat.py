@@ -152,12 +152,28 @@ def greetings(data: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+# Raw string on purpose: `re` understands `\uXXXX` / `\UXXXXXXXX` itself, and
+# leaving the escapes for it to read keeps the astral endpoints legible as
+# codepoints to anything reading the pattern -- including CodeQL, which decodes
+# a non-raw literal's astral characters into replacement characters and then
+# reports the ranges as nonsense that overlaps itself (py/overly-large-range).
 _EMOJI_PREFIX_RE = re.compile(
-    "^[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
-    "\uFE0F\u200D]+\\s*"
+    r"^[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
+    r"\uFE0F\u200D]+\s*"
 )
-_MARKER_START_RE = re.compile(r"^\s*##[A-Z _]*(?:START|END)##[ \t]*\r?\n?")
-_MARKER_END_RE = re.compile(r"\r?\n?[ \t]*##[A-Z _]*(?:START|END)##\s*$")
+
+# The opening half of a `##DESCRIPTION START##` delimiter, anchored to the
+# start of a line by `.match()`. The label is captured whole and the START/END
+# test happens in Python because spelling it inline
+# (`##[A-Z _]*(?:START|END)##`) puts two quantifiers that can both match the
+# same characters next to each other -- `[A-Z _]*` has to hand "START" back
+# before the alternation can take it. Here the class cannot match the `#` that
+# must follow it, so there is one way to match and nothing to backtrack.
+_MARKER_OPEN_RE = re.compile(r"[ \t]*##([A-Z _]*)##[ \t]*\r?")
+
+# The label alone, for the closing delimiter, which `_marker_suffix_start`
+# locates by walking back from the end of the line instead of matching.
+_MARKER_LABEL_RE = re.compile(r"[A-Z _]*")
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 
 
@@ -165,14 +181,77 @@ def _is_url(value: Any) -> bool:
     return isinstance(value, str) and bool(_URL_RE.match(value))
 
 
+def _marker_prefix_len(line: str) -> int:
+    """How much of `line` a leading `##LABEL START##` delimiter takes up, or 0.
+
+    A length rather than a bool because the opening delimiter is not always
+    alone on its line -- a recovery body can open `##DESCRIPTION START##text`
+    -- and the text after it is content that has to survive.
+    """
+    m = _MARKER_OPEN_RE.match(line)
+    if m is None or not m.group(1).endswith(("START", "END")):
+        return 0
+    return m.end()
+
+
+def _marker_suffix_start(line: str) -> int:
+    """Index at which a trailing `##LABEL END##` delimiter begins, or -1.
+
+    Walks back from the end rather than searching forward. A `.search()` for a
+    pattern starting `[ \t]*##` retries at every offset and re-walks the whole
+    of a long run of tabs from each one, which is quadratic in that run's
+    length (py/polynomial-redos); `rfind` from the end is one pass. The
+    delimiter does not have to be alone on the line, for the same reason the
+    opening one does not.
+    """
+    core = line.rstrip(" \t\r")
+    if not core.endswith("##"):
+        return -1
+    open_at = core.rfind("##", 0, len(core) - 2)
+    if open_at < 0:
+        return -1
+    label = core[open_at + 2 : len(core) - 2]
+    if not label.endswith(("START", "END")) or not _MARKER_LABEL_RE.fullmatch(label):
+        return -1
+    start = open_at
+    while start > 0 and line[start - 1] in " \t":
+        start -= 1
+    return start
+
+
 def strip_datacat_markers(text: str | None) -> str:
     """Strip recovery-sourced `##DESCRIPTION START##`-style delimiter lines.
-    /download bodies never carry these; content_variants recovery bodies do."""
+    /download bodies never carry these; content_variants recovery bodies do.
+
+    Only the first and last lines are candidates -- a marker in the middle of a
+    description is that description's content. Blank lines around either one are
+    skipped rather than treated as a mismatch, and the result is `.strip()`ed, so
+    which side of the delimiter the surrounding whitespace fell on never matters.
+    """
+    # Line-at-a-time rather than two `.sub()`s over the whole body; see the note
+    # on _MARKER_LINE_RE for why.
     if not isinstance(text, str) or not text:
         return text or ""
-    text = _MARKER_START_RE.sub("", text)
-    text = _MARKER_END_RE.sub("", text)
-    return text.strip()
+
+    lines = text.split("\n")
+
+    first = 0
+    while first < len(lines) and not lines[first].strip():
+        first += 1
+    if first < len(lines):
+        cut = _marker_prefix_len(lines[first])
+        if cut:
+            lines[first] = lines[first][cut:]
+            del lines[:first]
+
+    while lines and not lines[-1].strip():
+        del lines[-1]
+    if lines:
+        cut = _marker_suffix_start(lines[-1])
+        if cut >= 0:
+            lines[-1] = lines[-1][:cut]
+
+    return "\n".join(lines).strip()
 
 
 def resolve_tag_names(tags: Any) -> list[str]:

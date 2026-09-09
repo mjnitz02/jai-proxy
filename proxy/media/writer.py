@@ -519,7 +519,15 @@ async def _fetch(client: httpx.AsyncClient, url: str) -> tuple[bytes | None, str
     set. Streams with the size cap rather than buffering a potentially huge
     body first."""
     try:
-        async with client.stream("GET", url, follow_redirects=True) as response:
+        # `guarded_stream` rather than `follow_redirects=True`, because
+        # `download_item`'s preflight only ever saw the URL written on the
+        # card: a host that passes it can still answer `302 Location:` pointing
+        # at the LAN, and httpx would follow that hop unvetted. `check_first`
+        # is off because that preflight has already cleared this first URL --
+        # and it, not this, is what records the refusal as permanently dead.
+        async with media_guard.guarded_stream(
+            client, "GET", url, check_first=False
+        ) as response:
             if response.status_code >= 400:
                 return None, None, f"HTTP {response.status_code}"
             try:
@@ -527,6 +535,8 @@ async def _fetch(client: httpx.AsyncClient, url: str) -> tuple[bytes | None, str
             except media_guard.MediaTooLargeError as exc:
                 return None, None, str(exc)
             return body, response.headers.get("content-type"), None
+    except media_guard.UnsafeTargetError as exc:
+        return None, None, f"refused: {exc}"
     except httpx.HTTPError as exc:
         return None, None, str(exc)
 

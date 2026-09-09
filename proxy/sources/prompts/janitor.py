@@ -19,7 +19,23 @@ _SKIP_TAGS_FOR_NAME = {"system", "scenario", "example_dialogs", "persona", "user
 # (Excluding `/` outright, as an earlier version did, meant a slash in the
 # character name hid the persona tag, so the parser latched onto an inner tag and
 # keyed the capture under the wrong name -- see test_slash_in_name_* .)
-_OPEN_TAG_RE = re.compile(r"<\s*(?!/)([^<>]+?)\s*>", re.IGNORECASE)
+# The whitespace around the name is matched by a *lookahead* rather than
+# consumed, and the name is captured greedily rather than lazily, because the
+# obvious spelling (`<\s*(?!/)([^<>]+?)\s*>`) is polynomial -- measurably cubic:
+# `\s*`, the lazy name class and the trailing `\s*` all match a space, so a
+# `<` followed by a long run of spaces and no `>` makes the engine retry every
+# way of splitting that run between the three of them (1.3s at 2,000 spaces,
+# 0.18s at 1,000). Here `[^<>]+` cannot match the `>` that must follow it, so
+# there is one way to match and nothing to backtrack. `_find_first_non_skipped_tag`
+# already `.strip()`s the group, so dropping the trimming from the pattern
+# costs nothing.
+#
+# One edge case moves as a result, in the direction the paragraph above asks
+# for: `< /name>` used to be read as an opening tag named "/name", because the
+# old `\s*` could give the space back and let the lookahead pass over it. It is
+# now rejected as the malformed closing tag it is. No fixture in tests/ matches
+# either way.
+_OPEN_TAG_RE = re.compile(r"<(?!\s*/)([^<>]+)>", re.IGNORECASE)
 
 # Support the straight apostrophe plus common curly/typographic variants a
 # creator's name might carry in from copy-paste.

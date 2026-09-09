@@ -238,3 +238,63 @@ def test_resolve_avatar_url_prefers_the_untouched_janitorai_original():
     )
 
 
+
+
+# ---------------------------------------------------------------------------
+# strip_datacat_markers
+#
+# The `##DESCRIPTION START##` delimiters only ever come from a recovery body,
+# never from /download, so these are the shapes that job emits plus the ones
+# that must survive untouched. Pinned here because the two `.sub()`s this
+# replaced were quadratic in a run of tabs (py/polynomial-redos) and the
+# rewrite is line-based -- the behaviour is the thing worth holding still.
+# ---------------------------------------------------------------------------
+
+
+def test_markers_are_stripped_from_both_ends():
+    body = "##DESCRIPTION START##\nAbbie is a loan shark.\n##DESCRIPTION END##"
+    assert mapper.strip_datacat_markers(body) == "Abbie is a loan shark."
+
+
+def test_markers_survive_crlf_indentation_and_blank_lines():
+    body = "\n  ##PERSONALITY START##\r\nblunt\r\n  ##PERSONALITY END##  \n\n"
+    assert mapper.strip_datacat_markers(body) == "blunt"
+
+
+def test_content_on_the_opening_marker_line_survives():
+    body = "##DESCRIPTION START##Abbie\nmore"
+    assert mapper.strip_datacat_markers(body) == "Abbie\nmore"
+
+
+def test_only_the_outer_lines_are_delimiters():
+    body = "##DESCRIPTION START##\nshe says ##NOT A MARKER## a lot\n##DESCRIPTION END##"
+    assert mapper.strip_datacat_markers(body) == "she says ##NOT A MARKER## a lot"
+
+
+def test_a_label_that_is_not_start_or_end_is_left_alone():
+    assert mapper.strip_datacat_markers("##HEADING##\nbody") == "##HEADING##\nbody"
+
+
+def test_lowercase_is_not_a_marker():
+    assert mapper.strip_datacat_markers("##description start##\nbody") == "##description start##\nbody"
+
+
+def test_an_unmarked_body_is_only_stripped():
+    assert mapper.strip_datacat_markers("  plain description  ") == "plain description"
+
+
+def test_missing_and_empty_bodies_degrade_to_empty():
+    assert mapper.strip_datacat_markers(None) == ""
+    assert mapper.strip_datacat_markers("") == ""
+    assert mapper.strip_datacat_markers("\n\n\n") == ""
+
+
+def test_a_long_run_of_tabs_does_not_hang():
+    """What the alert was about: 200k tabs used to be walked once per starting
+    offset. Anything but instant here means the scan came back."""
+    import time
+
+    body = "\t" * 200_000
+    started = time.perf_counter()
+    assert mapper.strip_datacat_markers(body) == ""
+    assert time.perf_counter() - started < 1.0

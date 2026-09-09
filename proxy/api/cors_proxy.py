@@ -22,6 +22,11 @@ downloader uses, scheme + literal-host checks plus a DNS preflight. That is what
 keeps this from being an SSRF hole pointed at the LAN it runs inside, and it is
 also what stops the route being aimed back at this server's own origin.
 
+Every *hop* of a request, not every request: the fetch goes through
+`guard.guarded_stream`, which walks redirects itself and re-runs the checks on
+each one. Vetting only the URL that arrived and then letting httpx follow the
+chain would leave the whole guard behind the first `302`.
+
 There is no enable/disable toggle. The route is useless to an attacker who can
 already reach a machine on your LAN (the guard refuses every private and
 loopback target, so it cannot be used to pivot inwards), and the frontend has no
@@ -31,7 +36,6 @@ so the guard's 400 on a self-referential URL reports correctly.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 import httpx
@@ -148,23 +152,16 @@ async def _forward(url: str, request: Request) -> Response:
     if not target:
         return PlainTextResponse("no URL given", status_code=400)
 
-    safety = media_guard.is_url_safe_for_download(target)
-    if not safety.ok:
-        # 400, not 403: `gatherEnvInfo` probes this route with our own origin to
-        # find out whether it exists at all, and reads anything that isn't a 404
-        # as "enabled". A refusal is a correct answer, not a missing route.
-        return PlainTextResponse(f"refused: {safety.reason}", status_code=400)
-
-    # getaddrinfo blocks; off the event loop, exactly as the media writer does it.
-    dns_reason = await asyncio.to_thread(media_guard.preflight_dns, target)
-    if dns_reason:
-        return PlainTextResponse(f"refused: {dns_reason}", status_code=400)
-
     body = await request.body() if request.method == "POST" else None
 
     try:
-        async with net.async_client(timeout=30.0, follow_redirects=True) as client:
-            async with client.stream(
+        # follow_redirects stays off: `guarded_stream` walks the chain itself so
+        # that every hop goes through the guard, rather than only the URL the
+        # caller handed us. See its docstring -- a vetted host answering `302
+        # Location: http://169.254.169.254/` is the whole reason.
+        async with net.async_client(timeout=30.0, follow_redirects=False) as client:
+            async with media_guard.guarded_stream(
+                client,
                 request.method,
                 target,
                 headers=_forwarded_request_headers(request),
@@ -173,12 +170,24 @@ async def _forward(url: str, request: Request) -> Response:
                 try:
                     payload = await media_guard.read_body_with_cap(upstream)
                 except media_guard.MediaTooLargeError as exc:
-                    return PlainTextResponse(f"refused: {exc}", status_code=502)
+                    # The cap and the URL, not the exception: an upstream error
+                    # echoed into a response body is how internal detail leaks
+                    # out of a route whose whole job is fetching for strangers.
+                    logger.warning("cors proxy refused an oversized body from %s: %s", target, exc)
+                    return PlainTextResponse(
+                        f"refused: response too large: over {media_guard.MAX_MEDIA_BYTES} bytes",
+                        status_code=502,
+                    )
                 return Response(
                     content=payload,
                     status_code=upstream.status_code,
                     headers=_forwarded_response_headers(upstream),
                 )
+    except media_guard.UnsafeTargetError as exc:
+        # 400, not 403: `gatherEnvInfo` probes this route with our own origin to
+        # find out whether it exists at all, and reads anything that isn't a 404
+        # as "enabled". A refusal is a correct answer, not a missing route.
+        return PlainTextResponse(f"refused: {exc}", status_code=400)
     except httpx.HTTPError as exc:
         # The body has to be exactly this string -- see UPSTREAM_UNREACHABLE_BODY.
         logger.warning("cors proxy could not reach %s: %s", target, exc)

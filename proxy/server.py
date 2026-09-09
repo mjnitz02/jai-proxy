@@ -170,6 +170,34 @@ def _server_owned_prefixes() -> frozenset[str]:
 
 SERVER_OWNED_PREFIXES = _server_owned_prefixes()
 
+# Resolved once, at import: the containment test below compares against it on
+# every request, and it is the fixed half of that comparison.
+_DIST_ROOT = FRONTEND_DIST.resolve()
+
+
+def _asset_within_dist(full_path: str) -> Path | None:
+    """The real file inside dist/ that `full_path` names, or None for anything
+    else -- a miss, a directory, or an escape attempt.
+
+    Containment is decided before anything touches the filesystem, and on the
+    *resolved* path, because the string arrives straight from the URL and two
+    separate things can take it outside dist/. `Path("frontend/dist") /
+    "/etc/passwd"` is `/etc/passwd` -- a `/`-prefixed right operand discards
+    the left one entirely -- and `../` sequences and symlinks inside dist/ can
+    each point anywhere. `relative_to` against the resolved root answers all
+    three at once; `resolve()` is non-strict, so a path that does not exist
+    gets the same answer as one that does rather than raising here.
+    """
+    if not full_path:
+        return None
+    candidate = (FRONTEND_DIST / full_path).resolve()
+    try:
+        candidate.relative_to(_DIST_ROOT)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
 if FRONTEND_DIST.is_dir():
     app.mount(
         "/assets",
@@ -192,15 +220,9 @@ if FRONTEND_DIST.is_dir():
         head = full_path.split("/", 1)[0]
         if head in SERVER_OWNED_PREFIXES:
             raise HTTPException(status_code=404, detail="Not Found")
-        candidate = FRONTEND_DIST / full_path
-        # `resolve()` on both sides so a traversal (`/../../etc/passwd`) cannot
-        # escape dist/ -- the path arrives from the URL, unvalidated.
-        if (
-            full_path
-            and candidate.is_file()
-            and FRONTEND_DIST.resolve() in candidate.resolve().parents
-        ):
-            return FileResponse(candidate)
+        asset = _asset_within_dist(full_path)
+        if asset is not None:
+            return FileResponse(asset)
         # no-store on the shell only: it names the hashed assets, so a cached
         # copy would keep pointing at the previous build's JavaScript.
         return FileResponse(
