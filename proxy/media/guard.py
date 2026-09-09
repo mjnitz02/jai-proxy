@@ -25,14 +25,28 @@ fetcher (task 4), not just once up front — a URL can be re-resolved to a
 different, unsafe address between the check and the connect (TOCTOU), so the
 fetcher must pin the resolved address it checked and connect to that address
 directly rather than re-resolving the hostname.
+
+`guarded_stream` is the third piece, and it closes a gap the first two cannot
+see: a URL that passes every check is still free to answer `302 Location:
+http://169.254.169.254/`. `follow_redirects=True` hands that chain to httpx,
+which knows nothing about any of this, so the fetch lands wherever the redirect
+says having been vetted once — at the one address that was never the target.
+Both server-side fetchers go through it, for the same reason `preflight_dns`
+lives here: a security check with two implementations is a security check with
+one of them out of date.
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import ipaddress
 import socket
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
+
+import httpx
 
 # 50 MB hard cap per file. Verbatim MAX_MEDIA_BYTES (30-…:757).
 MAX_MEDIA_BYTES = 50 * 1024 * 1024
@@ -241,6 +255,105 @@ def check_content_length(declared: int | None, max_bytes: int = MAX_MEDIA_BYTES)
 
 class MediaTooLargeError(Exception):
     pass
+
+
+class UnsafeTargetError(Exception):
+    """A URL a fetch was about to go to failed the guard. Carries the reason
+    string the caller shows or logs, and nothing else."""
+
+
+# Matches httpx's own default. Long enough for the shortener-then-CDN chains
+# real image hosts use, short enough that a redirect loop ends.
+MAX_REDIRECTS = 10
+
+# Sent on the first hop but not replayed once a redirect has turned the request
+# into a bodiless GET, where they would describe a body that is no longer there.
+_BODY_HEADERS = frozenset({"content-type", "content-length", "transfer-encoding"})
+
+
+async def check_target(url: str) -> str | None:
+    """A refusal reason for `url`, or None if it is safe to fetch.
+
+    The literal checks plus the DNS preflight, with the blocking `getaddrinfo`
+    moved off the event loop -- the pair every server-side fetcher has to run,
+    in one place so neither can drift.
+    """
+    safety = is_url_safe_for_download(url)
+    if not safety.ok:
+        return safety.reason
+    return await asyncio.to_thread(preflight_dns, url)
+
+
+def _redirect_method(method: str, status_code: int) -> str:
+    """How a browser (and httpx) rewrites the method across a redirect: 303
+    turns anything but HEAD into GET, and 301/302 do the same to a POST."""
+    if status_code == 303 and method != "HEAD":
+        return "GET"
+    if status_code in (301, 302) and method == "POST":
+        return "GET"
+    return method
+
+
+@contextlib.asynccontextmanager
+async def guarded_stream(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    *,
+    headers: Mapping[str, str] | None = None,
+    content: bytes | None = None,
+    max_redirects: int = MAX_REDIRECTS,
+    check_first: bool = True,
+) -> AsyncIterator[httpx.Response]:
+    """`client.stream(...)`, with the guard re-run on every redirect hop.
+
+    This exists because `follow_redirects=True` hands the chain to httpx, which
+    knows nothing about the guard. Checking only the URL the caller was given
+    then letting httpx walk the rest is not a check at all: a host that passes
+    every test can answer `302 Location: http://169.254.169.254/`, and the
+    fetch lands on the metadata service having been vetted exactly once, at the
+    one address that was never the target. So the hops are walked here and each
+    new one goes through `check_target` before it is opened.
+
+    Raises `UnsafeTargetError` for a hop the guard refuses -- including the
+    first, so a caller need not check the URL separately -- and for a chain
+    longer than `max_redirects`. `check_first=False` skips only that first
+    check, for the one caller that has already run it and wants its own answer:
+    the media writer refuses a card's URL *permanently* in its ledger, which is
+    a decision about that URL rather than about this fetch, so it stays there.
+
+    `follow_redirects=False` is passed per request rather than assumed of the
+    client, so a client configured to follow them cannot quietly defeat this.
+    """
+    target = url
+    sent_headers = dict(headers or {})
+    body = content
+
+    for hop in range(max_redirects + 1):
+        if hop or check_first:
+            reason = await check_target(target)
+            if reason:
+                raise UnsafeTargetError(reason)
+
+        async with client.stream(
+            method, target, headers=sent_headers, content=body, follow_redirects=False
+        ) as response:
+            location = response.headers.get("location")
+            if not (response.is_redirect and location):
+                yield response
+                return
+
+            # `urljoin` because a Location may be relative to the hop it came
+            # from, and it is the *resolved* URL the guard has to see.
+            target = urljoin(str(response.url), location)
+            next_method = _redirect_method(method, response.status_code)
+            if next_method != method:
+                method, body = next_method, None
+                sent_headers = {
+                    k: v for k, v in sent_headers.items() if k.lower() not in _BODY_HEADERS
+                }
+
+    raise UnsafeTargetError(f"too many redirects (more than {max_redirects})")
 
 
 async def read_body_with_cap(response, max_bytes: int = MAX_MEDIA_BYTES) -> bytes:
