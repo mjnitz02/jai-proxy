@@ -32,6 +32,17 @@ updates:
     groups:
       frontend-dependencies:
         patterns: ['*']
+    ignore:
+      # openapi-typescript peers on TS ^5 and crashes on 7 (`ts.factory`
+      # undefined), breaking `make api-schema`; TS7 also defaults `strict` on.
+      # Lift this once openapi-typescript supports 7.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # 30.1.0's FormData/File can't be sent through Node's fetch ("reading
+      # '_buffer'"), so every upload test fails. Only 30.1.x is skipped so a
+      # fixed release still comes through.
+      - dependency-name: jsdom
+        versions: ['30.1.x']
   - package-ecosystem: github-actions
     directory: /
     schedule:
