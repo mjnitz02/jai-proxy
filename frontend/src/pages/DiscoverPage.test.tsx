@@ -17,7 +17,12 @@ import { DiscoverPage } from './DiscoverPage'
  */
 
 const NODES = [
-  { id: 412233, fullPath: 'kornypony/abbie', name: 'Abbie', topics: ['Female'] },
+  {
+    id: 412233,
+    fullPath: 'kornypony/abbie',
+    name: 'Abbie',
+    topics: ['Female'],
+  },
   { id: 891020, fullPath: 'someone/bella', name: 'Bella', topics: ['Female'] },
 ]
 

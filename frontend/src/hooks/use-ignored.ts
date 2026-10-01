@@ -65,7 +65,10 @@ export function useIgnoreCards() {
       client.setQueryData<{ ignored: Record<string, string[]> }>(
         ['discover-ignored'],
         (current) => ({
-          ignored: { ...(current?.ignored ?? {}), [result.provider]: result.ids },
+          ignored: {
+            ...(current?.ignored ?? {}),
+            [result.provider]: result.ids,
+          },
         }),
       )
     },
