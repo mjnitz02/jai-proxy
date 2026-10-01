@@ -8,9 +8,9 @@
 # stranded behind the first until Dependabot's next weekly run.
 #
 # One consequence worth knowing: a merge made on behalf of GITHUB_TOKEN does not
-# fire `push` workflows, so publish.yml does NOT run for these. Dependency bumps
-# reach :latest with the next human merge to main (or a manual dispatch of
-# publish).
+# fire `push` workflows, so publish.yml does NOT run on these merges. Its daily
+# schedule picks them up instead: dependency bumps reach :latest, and get a
+# release, within a day.
 
 name: dependabot-automerge
 

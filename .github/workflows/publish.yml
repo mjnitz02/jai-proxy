@@ -1,4 +1,9 @@
-# Publish the server image to GitHub Container Registry.
+# Release whatever is at the tip of main: publish the server image to GitHub
+# Container Registry and cut a GitHub release for it.
+#
+# Nothing in a pull request bumps a version. The number is worked out here from
+# the existing git tags (see "Work out the next version"), and the tag is
+# created by the release at the end of the run.
 #
 # The deployment target is an unraid box (amd64), which pulls
 # ghcr.io/mjnitz02/jai-proxy:latest. Development on a Mac runs from
@@ -14,7 +19,12 @@ name: publish
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+  schedule:
+    # Daily, 06:41 UTC. A merge performed with a workflow's GITHUB_TOKEN does
+    # not fire `push` workflows, and that is exactly how Dependabot PRs land
+    # (see dependabot-automerge.yml). This sweep picks those up. When the tip
+    # of main is already released it does nothing.
+    - cron: "41 6 * * *"
   workflow_dispatch:
 
 env:
@@ -22,40 +32,88 @@ env:
   # spelled "mjnitz02".
   IMAGE_NAME: ghcr.io/mjnitz02/jai-proxy
 
+# One release at a time, so two merges in quick succession cannot both claim
+# the same version number.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      # The only elevated permission needed. GITHUB_TOKEN carries it, so there
-      # is no PAT to create, store as a secret, or rotate.
+      # To create the release and its tag.
+      contents: write
+      # To push the image. GITHUB_TOKEN carries both, so there is no PAT to
+      # create, store as a secret, or rotate.
       packages: write
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Always the current tip of main rather than the commit that
+          # triggered the run, so a queued run never releases a stale commit.
+          ref: main
+          fetch-depth: 0 # all tags, to find the latest release
 
-      - uses: docker/setup-buildx-action@v4
+      - name: Work out the next version
+        id: plan
+        run: |
+          if [ -n "$(git tag --points-at HEAD --list 'v*')" ]; then
+            echo "$(git rev-parse --short HEAD) is already released. Nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-      - uses: docker/login-action@v4
+          # Next patch after the newest release tag...
+          LATEST=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          NEXT=""
+          if [ -n "$LATEST" ]; then
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
+            NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+
+          # ...unless pyproject.toml asks for something higher, which is how a
+          # minor or major release is made (`make bump-minor` / `bump-major`).
+          FLOOR=$(grep -E '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          VERSION=$(printf '%s\n' "$NEXT" "$FLOOR" | sort -V | tail -n1)
+          echo "Latest release: ${LATEST:-none}, pyproject.toml: $FLOOR, releasing: $VERSION"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.plan.outputs.release == 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - if: steps.plan.outputs.release == 'true'
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - id: meta
+      - if: steps.plan.outputs.release == 'true'
+        id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME }}
           # :latest tracks main (what unraid follows), :sha-<short> is the exact
-          # rollback target for any build, and a v1.2.3 git tag additionally
-          # publishes :1.2.3 and :1.2.
+          # rollback target for any build, and :1.2.3 / :1.2 are the release.
+          #
+          # The sha tag and revision label are spelled out rather than left to
+          # `type=sha`, which reads the commit that triggered the run. That is
+          # not necessarily the one checked out above.
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+            type=raw,value=sha-${{ steps.plan.outputs.short_sha }}
+            type=semver,pattern={{version}},value=v${{ steps.plan.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.plan.outputs.version }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.plan.outputs.sha }}
 
-      - uses: docker/build-push-action@v7
+      - if: steps.plan.outputs.release == 'true'
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
@@ -67,3 +125,17 @@ jobs:
           # rebuilds the COPY layers.
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Last, so the tag only exists once the image does. The tag is what marks
+      # a commit as released; if the build fails, the next run tries again.
+      - name: Create release
+        if: steps.plan.outputs.release == 'true'
+        run: |
+          gh release create "v$VERSION" \
+            --target "$SHA" \
+            --title "$VERSION" \
+            --generate-notes
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          SHA: ${{ steps.plan.outputs.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

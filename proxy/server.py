@@ -192,14 +192,15 @@ if FRONTEND_DIST.is_dir():
         head = full_path.split("/", 1)[0]
         if head in SERVER_OWNED_PREFIXES:
             raise HTTPException(status_code=404, detail="Not Found")
-        candidate = FRONTEND_DIST / full_path
-        # `resolve()` on both sides so a traversal (`/../../etc/passwd`) cannot
-        # escape dist/ -- the path arrives from the URL, unvalidated.
-        if (
-            full_path
-            and candidate.is_file()
-            and FRONTEND_DIST.resolve() in candidate.resolve().parents
-        ):
+        # The path arrives from the URL, unvalidated. Resolve it first and only
+        # touch the filesystem once it is known to sit under dist/, so a
+        # traversal (`/../../etc/passwd`) can neither be read nor probed for.
+        root = os.path.realpath(FRONTEND_DIST)
+        try:
+            candidate = os.path.realpath(os.path.join(root, full_path))
+        except ValueError:  # an embedded NUL -- no such file, serve the shell
+            candidate = ""
+        if full_path and candidate.startswith(root + os.sep) and os.path.isfile(candidate):
             return FileResponse(candidate)
         # no-store on the shell only: it names the hashed assets, so a cached
         # copy would keep pointing at the previous build's JavaScript.

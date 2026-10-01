@@ -1,5 +1,6 @@
 .PHONY: compile test test-js run docker-build docker-up docker-pull docker-up-prod import gallery-ids check names thumbs settings-import \
-	frontend-install frontend-lint frontend-typing frontend-test frontend-build frontend-dev frontend-smoke api-schema
+	frontend-install frontend-lint frontend-typing frontend-test frontend-build frontend-dev frontend-smoke api-schema \
+	bump-minor bump-major
 
 # Every target reads .env (see .env.template) via proxy/config.py -- most
 # importantly JAI_PROXY_ARCHIVE_DIR, the cards folder they all read and write.
@@ -22,6 +23,16 @@ test-js:
 
 run:
 	uv run python -m proxy.server
+
+# Patch releases need nothing: the publish workflow assigns the patch number
+# from the git tags on every merge to main. These raise the version in
+# pyproject.toml (and uv.lock), which makes the next release start a new minor
+# (0.1.x -> 0.2.0) or major (0.1.x -> 1.0.0) series.
+bump-minor:
+	uv version --bump minor
+
+bump-major:
+	uv version --bump major
 
 # ---------------------------------------------------------------------------
 # frontend/ -- the browser client (docs/UI_REWRITE_PLAN.md). Served by Vite on

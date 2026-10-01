@@ -152,12 +152,11 @@ def greetings(data: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-_EMOJI_PREFIX_RE = re.compile(
-    "^[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
-    "\uFE0F\u200D]+\\s*"
-)
-_MARKER_START_RE = re.compile(r"^\s*##[A-Z _]*(?:START|END)##[ \t]*\r?\n?")
-_MARKER_END_RE = re.compile(r"\r?\n?[ \t]*##[A-Z _]*(?:START|END)##\s*$")
+# Pictographs, dingbats/misc symbols, regional-indicator flags -- plus the
+# variation selector and ZWJ that glue multi-codepoint emoji together.
+_EMOJI_RANGES = ((0x1F300, 0x1FAFF), (0x2600, 0x27BF), (0x1F1E6, 0x1F1FF))
+_EMOJI_JOINERS = "\uFE0F\u200D"
+_MARKER_BODY_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ _")
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 
 
@@ -165,13 +164,46 @@ def _is_url(value: Any) -> bool:
     return isinstance(value, str) and bool(_URL_RE.match(value))
 
 
+def _is_emoji_char(ch: str) -> bool:
+    code = ord(ch)
+    return ch in _EMOJI_JOINERS or any(lo <= code <= hi for lo, hi in _EMOJI_RANGES)
+
+
+def _strip_emoji_prefix(text: str) -> str:
+    """Drop a leading run of emoji and the whitespace after it; text that does
+    not start with one comes back untouched."""
+    end = 0
+    while end < len(text) and _is_emoji_char(text[end]):
+        end += 1
+    return text[end:].lstrip() if end else text
+
+
+def _is_marker(token: str) -> bool:
+    """Whether `token` is exactly one `##[A-Z _]*(START|END)##` delimiter."""
+    if len(token) < 4 or not (token.startswith("##") and token.endswith("##")):
+        return False
+    body = token[2:-2]
+    return body.endswith(("START", "END")) and _MARKER_BODY_CHARS.issuperset(body)
+
+
 def strip_datacat_markers(text: str | None) -> str:
     """Strip recovery-sourced `##DESCRIPTION START##`-style delimiter lines.
-    /download bodies never carry these; content_variants recovery bodies do."""
+    /download bodies never carry these; content_variants recovery bodies do.
+
+    One marker off the front, one off the back, found by position rather than
+    by regex: this runs on text a stranger wrote, and the patterns it replaces
+    (`[ \\t]*##...##\\s*$`, unanchored) went quadratic on a long run of tabs."""
     if not isinstance(text, str) or not text:
         return text or ""
-    text = _MARKER_START_RE.sub("", text)
-    text = _MARKER_END_RE.sub("", text)
+    text = text.strip()
+    if text.startswith("##"):
+        close = text.find("##", 2)
+        if close != -1 and _is_marker(text[: close + 2]):
+            text = text[close + 2 :].strip()
+    if text.endswith("##"):
+        start = text.rfind("##", 0, len(text) - 2)
+        if start != -1 and _is_marker(text[start:]):
+            text = text[:start]
     return text.strip()
 
 
@@ -186,7 +218,7 @@ def resolve_tag_names(tags: Any) -> list[str]:
             name = t.strip()
         elif isinstance(t, dict):
             raw = _s(t.get("name")) or _s(t.get("slug"))
-            name = _EMOJI_PREFIX_RE.sub("", raw).strip() or raw
+            name = _strip_emoji_prefix(raw).strip() or raw
         else:
             name = ""
         if name:
