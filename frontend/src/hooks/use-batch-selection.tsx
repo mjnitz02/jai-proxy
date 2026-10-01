@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { useLocation } from 'react-router'
 
 interface BatchSelectionValue {
@@ -10,13 +17,23 @@ interface BatchSelectionValue {
   toggleSelected: (id: string) => void
   /** Cancel: unselect everything and exit batch mode. */
   clear: () => void
+  /** Drop the selection but stay in batch mode — for when what is on screen
+   *  changes underneath it (Discover switching provider), so the selection
+   *  cannot outlive the rows it names. */
+  clearSelected: () => void
 }
 
 const BatchSelectionContext = createContext<BatchSelectionValue | null>(null)
 
-/** The routes batch mode makes sense on — the character grid, in either of
- *  its two guises. Elsewhere there is no grid to select from. */
-const BATCH_ROUTES = new Set(['/', '/favorites'])
+/** The routes batch mode makes sense on — the character grid in either of its
+ *  two guises, and Discover's provider grid. Elsewhere there is no grid to
+ *  select from.
+ *
+ *  The two kinds of grid select different things and offer different actions
+ *  (delete a card you own; ignore one you don't), which is why `BatchActionBar`
+ *  branches on the route rather than this hook growing a mode. What they share
+ *  is the state, and that is all this holds. */
+const BATCH_ROUTES = new Set(['/', '/favorites', '/discover'])
 
 /**
  * Batch-select state for the bulk-delete flow (docs: batch mode).
@@ -44,6 +61,12 @@ export function BatchSelectionProvider({
     }
   }, [location.pathname])
 
+  // Stable across renders, unlike the handlers built in the memo below: this
+  // one is read as an effect dependency (`DiscoverPage` drops the selection
+  // when the feed changes), and an identity that changed with `selected` would
+  // re-fire that effect on every click and clear the selection being made.
+  const clearSelected = useCallback(() => setSelected(new Set()), [])
+
   const value = useMemo<BatchSelectionValue>(
     () => ({
       active,
@@ -63,8 +86,9 @@ export function BatchSelectionProvider({
         setActive(false)
         setSelected(new Set())
       },
+      clearSelected,
     }),
-    [active, selected],
+    [active, selected, clearSelected],
   )
 
   return (
