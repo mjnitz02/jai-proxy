@@ -48,9 +48,7 @@ def upstream(monkeypatch):
             seen.append(request)
             return responses["handler"](request)
 
-        return httpx.AsyncClient(transport=httpx.MockTransport(handler), **{
-            k: v for k, v in kwargs.items() if k != "follow_redirects"
-        })
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler), **kwargs)
 
     monkeypatch.setattr(cors_proxy.net, "async_client", fake_async_client)
     # The guard's DNS leg would resolve a fake hostname for real; the refusals
@@ -103,6 +101,31 @@ def test_a_host_that_resolves_only_to_private_addresses_is_refused(client, monke
     resp = client.get(f"/proxy/{enc('https://rebind.example.com/x')}")
     assert resp.status_code == 400
     assert "blocked addresses" in resp.text
+
+
+def test_a_redirect_to_an_internal_target_is_refused(client, upstream):
+    """The guard has to see every hop. A public URL that answers with a 302
+    into the LAN is the same SSRF as asking for the LAN address directly, and a
+    guard that only vets the URL it was handed never notices."""
+    upstream["responses"]["handler"] = lambda request: httpx.Response(
+        302, headers={"location": "http://192.168.1.10/admin"}
+    )
+    resp = client.get(f"/proxy/{enc('https://example.com/innocent.png')}")
+    assert resp.status_code == 400
+    assert "private IPv4" in resp.text
+    assert [str(r.url) for r in upstream["seen"]] == ["https://example.com/innocent.png"]
+
+
+def test_a_redirect_to_a_public_target_is_followed(client, upstream):
+    def handler(request):
+        if request.url.host == "example.com":
+            return httpx.Response(302, headers={"location": "https://cdn.example.net/a.png"})
+        return httpx.Response(200, text="image")
+
+    upstream["responses"]["handler"] = handler
+    resp = client.get(f"/proxy/{enc('https://example.com/a.png')}")
+    assert resp.status_code == 200
+    assert resp.text == "image"
 
 
 # --- /proxy/{url} : what it passes through -----------------------------------
@@ -204,7 +227,8 @@ def test_an_oversized_response_is_refused(client, upstream):
     )
     resp = client.get(f"/proxy/{enc('https://example.com/huge.png')}")
     assert resp.status_code == 502
-    assert "too large" in resp.text
+    # A fixed message: the exception's own text is not echoed to the caller.
+    assert resp.text == "refused: response too large"
 
 
 def test_the_passthrough_uses_the_configured_proxy(client, monkeypatch, populated_archive):

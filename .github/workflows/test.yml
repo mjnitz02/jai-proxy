@@ -13,6 +13,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Every job here only reads the tree; nothing pushes, comments or publishes.
+permissions:
+  contents: read
+
 jobs:
   python:
     runs-on: ubuntu-latest

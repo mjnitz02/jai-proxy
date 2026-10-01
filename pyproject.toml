@@ -1,3 +1,7 @@
+# `version` is major.minor only. The patch number is assigned by the publish
+# workflow from the git tags, so it never needs touching for an ordinary
+# change. To cut a new minor or major release, run `make bump-minor` or
+# `make bump-major` in the PR that earns it.
 [project]
 name = "jai-proxy"
 version = "0.1.0"

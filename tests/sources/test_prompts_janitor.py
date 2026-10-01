@@ -193,3 +193,12 @@ def test_closing_tag_with_slash_is_not_matched_as_the_name(parser):
 
     assert parsed.name == "Z"
     assert parsed.personality == "real body"
+
+
+def test_whitespace_inside_the_tag_brackets_is_not_part_of_the_name(parser):
+    # The name is trimmed by the caller now rather than inside the pattern
+    # (which backtracked quadratically on `<` + a long run of spaces).
+    parsed = parser.parse("<  Mira's Persona  >She is kind.</Mira's Persona>")
+
+    assert parsed.name == "Mira"
+    assert parsed.personality == "She is kind."

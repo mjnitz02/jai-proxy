@@ -18,7 +18,8 @@ gallery extractors is the traffic a person actually wants routed.
 
 WHAT IT WILL AND WON'T FETCH
 `proxy.media.guard` gates every request -- the same guard the server-side media
-downloader uses, scheme + literal-host checks plus a DNS preflight. That is what
+downloader uses, scheme + literal-host checks plus a DNS preflight -- and every
+redirect that request is answered with, hop by hop. That is what
 keeps this from being an SSRF hole pointed at the LAN it runs inside, and it is
 also what stops the route being aimed back at this server's own origin.
 
@@ -143,27 +144,50 @@ async def cors_proxy_post(url: str, request: Request) -> Response:
     return await _forward(url, request)
 
 
+class _HopRefused(Exception):
+    """Raised from the request hook to abandon a fetch the guard said no to."""
+
+
 async def _forward(url: str, request: Request) -> Response:
     target = url.strip()
     if not target:
         return PlainTextResponse("no URL given", status_code=400)
 
+    # 400, not 403, for every refusal below: `gatherEnvInfo` probes this route
+    # with our own origin to find out whether it exists at all, and reads
+    # anything that isn't a 404 as "enabled". A refusal is a correct answer,
+    # not a missing route.
     safety = media_guard.is_url_safe_for_download(target)
     if not safety.ok:
-        # 400, not 403: `gatherEnvInfo` probes this route with our own origin to
-        # find out whether it exists at all, and reads anything that isn't a 404
-        # as "enabled". A refusal is a correct answer, not a missing route.
         return PlainTextResponse(f"refused: {safety.reason}", status_code=400)
 
-    # getaddrinfo blocks; off the event loop, exactly as the media writer does it.
-    dns_reason = await asyncio.to_thread(media_guard.preflight_dns, target)
-    if dns_reason:
-        return PlainTextResponse(f"refused: {dns_reason}", status_code=400)
+    refusals: list[str] = []
+
+    async def guard_hop(hop: httpx.Request) -> None:
+        """Vet every request the client is about to send, not just the first.
+
+        httpx runs this for each redirect it follows, which is the point: a
+        public URL that answers `302 Location: http://192.168.1.1/` would
+        otherwise walk straight past a guard that only looked at `target`.
+        """
+        hop_url = str(hop.url)
+        hop_safety = media_guard.is_url_safe_for_download(hop_url)
+        if hop_safety.ok:
+            # getaddrinfo blocks; off the event loop, exactly as the media
+            # writer does it.
+            reason = await asyncio.to_thread(media_guard.preflight_dns, hop_url)
+        else:
+            reason = hop_safety.reason
+        if reason:
+            refusals.append(reason)
+            raise _HopRefused
 
     body = await request.body() if request.method == "POST" else None
 
     try:
-        async with net.async_client(timeout=30.0, follow_redirects=True) as client:
+        async with net.async_client(
+            timeout=30.0, follow_redirects=True, event_hooks={"request": [guard_hop]}
+        ) as client:
             async with client.stream(
                 request.method,
                 target,
@@ -172,13 +196,17 @@ async def _forward(url: str, request: Request) -> Response:
             ) as upstream:
                 try:
                     payload = await media_guard.read_body_with_cap(upstream)
-                except media_guard.MediaTooLargeError as exc:
-                    return PlainTextResponse(f"refused: {exc}", status_code=502)
+                except media_guard.MediaTooLargeError:
+                    # A fixed string, not the exception's own text: nothing
+                    # raised server-side is echoed back to the caller.
+                    return PlainTextResponse("refused: response too large", status_code=502)
                 return Response(
                     content=payload,
                     status_code=upstream.status_code,
                     headers=_forwarded_response_headers(upstream),
                 )
+    except _HopRefused:
+        return PlainTextResponse(f"refused: {refusals[-1]}", status_code=400)
     except httpx.HTTPError as exc:
         # The body has to be exactly this string -- see UPSTREAM_UNREACHABLE_BODY.
         logger.warning("cors proxy could not reach %s: %s", target, exc)

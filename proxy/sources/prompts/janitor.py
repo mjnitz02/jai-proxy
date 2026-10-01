@@ -19,7 +19,12 @@ _SKIP_TAGS_FOR_NAME = {"system", "scenario", "example_dialogs", "persona", "user
 # (Excluding `/` outright, as an earlier version did, meant a slash in the
 # character name hid the persona tag, so the parser latched onto an inner tag and
 # keyed the capture under the wrong name -- see test_slash_in_name_* .)
-_OPEN_TAG_RE = re.compile(r"<\s*(?!/)([^<>]+?)\s*>", re.IGNORECASE)
+#
+# The group takes the name with its surrounding whitespace and the caller strips
+# it. Trimming inside the pattern (`<\s*(...+?)\s*>`) gave three adjacent
+# quantifiers that all match a space, so `<` followed by a long run of spaces
+# and no `>` backtracked quadratically -- and this runs on a captured prompt.
+_OPEN_TAG_RE = re.compile(r"<(?!/)([^<>]+)>")
 
 # Support the straight apostrophe plus common curly/typographic variants a
 # creator's name might carry in from copy-paste.

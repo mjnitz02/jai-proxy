@@ -238,3 +238,35 @@ def test_resolve_avatar_url_prefers_the_untouched_janitorai_original():
     )
 
 
+
+
+# ---------------------------------------------------------------------------
+# strip_datacat_markers / resolve_tag_names -- hand-rolled scanners where there
+# used to be regexes that backtracked quadratically on a stranger's text.
+# ---------------------------------------------------------------------------
+
+
+def test_recovery_markers_are_stripped_from_both_ends():
+    body = "##DESCRIPTION START##\nName= Abbie\nAge= 24\n##DESCRIPTION END##\n"
+    assert mapper.strip_datacat_markers(body) == "Name= Abbie\nAge= 24"
+
+
+def test_a_trailing_marker_need_not_be_on_its_own_line():
+    assert mapper.strip_datacat_markers("Name= Abbie ##FIRST_MESSAGE END##") == "Name= Abbie"
+
+
+def test_only_a_real_marker_is_stripped():
+    # Lowercase, an unfinished delimiter, and a markdown heading are all content.
+    for text in ["##description start##\nhi", "## Backstory\nhi", "hi\n##NOT A MARKER##"]:
+        assert mapper.strip_datacat_markers(text) == text
+
+
+def test_a_marker_in_the_middle_is_left_alone():
+    text = "before\n##SCENARIO START##\nafter"
+    assert mapper.strip_datacat_markers(text) == text
+
+
+def test_emoji_prefixed_tag_names_lose_only_the_prefix():
+    tags = [{"name": "👤 Male"}, {"name": "🇯🇵Japan"}, {"name": "❤️ Romance"}, {"name": "🔥"}]
+    # A name that is nothing but emoji is kept whole rather than emptied.
+    assert mapper.resolve_tag_names(tags) == ["Male", "Japan", "Romance", "🔥"]
