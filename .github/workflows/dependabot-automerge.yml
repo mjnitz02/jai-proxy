@@ -1,0 +1,44 @@
+# Turns on GitHub's native auto-merge for Dependabot PRs. This workflow doesn't
+# merge anything itself: GitHub does, and only once the `main` ruleset is
+# satisfied -- the four required checks from test.yml are green. A red PR just
+# sits open like it always did.
+#
+# The ruleset deliberately does not require the branch to be up to date with
+# main: with that on, two Dependabot PRs open at once leave the second one
+# stranded behind the first until Dependabot's next weekly run.
+#
+# One consequence worth knowing: a merge made on behalf of GITHUB_TOKEN does not
+# fire `push` workflows, so publish.yml does NOT run for these. Dependency bumps
+# reach :latest with the next human merge to main (or a manual dispatch of
+# publish).
+
+name: dependabot-automerge
+
+on: pull_request
+
+permissions: {}
+
+jobs:
+  automerge:
+    # Keyed on the PR author rather than github.actor, which is whoever
+    # triggered this particular run and changes on a manual re-run.
+    #
+    # Docker PRs are excluded: they are base-image majors that no check
+    # exercises (see the note in dependabot.yml), so they wait for a human.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      !startsWith(github.head_ref, 'dependabot/docker/')
+    runs-on: ubuntu-latest
+    permissions:
+      # Dependabot-triggered runs get a read-only token unless the workflow
+      # asks for more. Merging needs both of these.
+      contents: write
+      pull-requests: write
+    steps:
+      # No checkout: nothing from the PR branch is executed with the write
+      # token, only the preinstalled gh CLI.
+      - name: Enable auto-merge
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
