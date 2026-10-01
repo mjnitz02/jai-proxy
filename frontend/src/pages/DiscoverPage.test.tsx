@@ -2,23 +2,9 @@ import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { screen, waitFor } from '@testing-library/react'
-import { useBatchSelection } from '@/hooks/use-batch-selection'
 import { server } from '@/test/msw-server'
 import { renderApp } from '@/test/render'
 import { DiscoverPage } from './DiscoverPage'
-
-/** Batch mode is toggled from `TopBar`, which this page does not render. This
- *  stands in for that button: a sibling under the same provider, so the grid
- *  and the bar are driven through the real context rather than a test hook
- *  bolted onto production code. */
-function BatchToggle() {
-  const { toggleActive } = useBatchSelection()
-  return (
-    <button type="button" onClick={toggleActive}>
-      batch
-    </button>
-  )
-}
 
 /**
  * Discover's two hide lists.
@@ -128,16 +114,15 @@ describe('marking cards ignored', () => {
 
     const user = userEvent.setup()
     // `?have=0` so the effect of the write is visible in the grid itself.
-    const { container } = renderApp(
-      <>
-        <BatchToggle />
-        <DiscoverPage />
-      </>,
-      { route: '/discover?have=0' },
-    )
+    const { container } = renderApp(<DiscoverPage />, {
+      route: '/discover?have=0',
+    })
     await waitFor(() => expect(screen.getByText('Abbie')).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: 'batch' }))
+    // The page's own control, not the top bar's icon: Discover is where every
+    // other filter for this grid lives, and the icon was missable enough that
+    // it read as the feature being absent.
+    await user.click(screen.getByRole('button', { name: 'Select to ignore' }))
 
     await user.click(screen.getByText('Abbie'))
     expect(screen.getByText('1 selected')).toBeInTheDocument()

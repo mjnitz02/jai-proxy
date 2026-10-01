@@ -299,6 +299,12 @@ export function DiscoverPage() {
             >
               Hide cards I have
             </ProviderChip>
+            <span className="mx-1 h-[18px] w-px bg-white/8" />
+            {/* Named for its outcome rather than its mechanism ("batch select"),
+                because ignoring is the only thing selecting does here. */}
+            <ProviderChip on={batch.active} onClick={batch.toggleActive}>
+              {batch.active ? 'Selecting…' : 'Select to ignore'}
+            </ProviderChip>
           </div>
 
           <DiscoverTagFilter
