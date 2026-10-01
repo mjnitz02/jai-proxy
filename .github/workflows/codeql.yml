@@ -1,7 +1,8 @@
 ---
 name: CodeQL
-# Python and TypeScript both analyze without a build step, so this is cheap
-# enough to run on every PR alongside the other checks.
+# Python, TypeScript and the workflow files themselves all analyze without a
+# build step, so this is cheap enough to run on every PR alongside the other
+# checks.
 on:
   push:
     branches: [main]
@@ -37,6 +38,11 @@ jobs:
           - language: python
             build-mode: none
           - language: javascript-typescript
+            build-mode: none
+          # .github/workflows/*.yml. Without this entry the alerts already
+          # filed under /language:actions are never re-analyzed, so they stay
+          # open after the workflow they point at is fixed.
+          - language: actions
             build-mode: none
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
