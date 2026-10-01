@@ -4,10 +4,9 @@ import { useBatchSelection } from '@/hooks/use-batch-selection'
 import { cn } from '@/lib/utils'
 import { ImportPopover } from './ImportPopover'
 
-/** The routes that show a character grid — the only place batch-select
- *  toggle makes sense. Kept in sync with `BATCH_ROUTES` in
- *  `use-batch-selection.tsx`. */
-const BATCH_TOGGLE_ROUTES = new Set(['/', '/favorites'])
+/** The routes that show a grid — the only place the batch-select toggle makes
+ *  sense. Kept in sync with `BATCH_ROUTES` in `use-batch-selection.tsx`. */
+const BATCH_TOGGLE_ROUTES = new Set(['/', '/favorites', '/discover'])
 
 const TABS = [
   { to: '/', label: 'Characters' },

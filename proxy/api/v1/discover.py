@@ -14,13 +14,19 @@ worse than no preview. Everything below the mapper call is shared with the
 build routes by construction -- `catalog.summarize_data` is the counting the
 archive applies to a card on disk, called here on a card that is not.
 
-Nothing here writes, fetches an avatar, or checks for duplicates. The browser
-already knows what it holds (`POST /characters/have`), and the write is a
-separate, deliberate action.
+The preview itself writes nothing, fetches no avatar and checks no duplicates.
+The browser already knows what it holds (`POST /characters/have`), and
+acquiring a card is a separate, deliberate action.
+
+The one write below is the opposite decision: `/discover/ignored` records the
+cards you have decided *against*, which is the only part of browsing that has
+nowhere else to live. See `proxy.state.ignored` for why that list is its own
+file and why it has no removal route.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
@@ -30,11 +36,24 @@ from proxy import deps
 from proxy.api.build import CHUB_AVATAR_BASE, build_card
 from proxy.archive import catalog
 from proxy.cards.models import CharacterBook
+from proxy.config import settings
 from proxy.sources import chub, datacat
+from proxy.state import ignored as ignored_state
+
+logger = logging.getLogger("jai_proxy.api.discover")
 
 router = APIRouter()
 
 SAUCEPAN_ORIGIN = "https://saucepan.ai"
+
+# The providers Discover browses, and so the only buckets these routes will
+# write. The store itself is bucket-agnostic (a third provider's rows survive a
+# read), but a typo reaching it would silently create a bucket nothing reads.
+Provider = Literal["chub", "datacat"]
+
+# Ids accepted in one request. A batch comes from what is selected on screen, so
+# this is far above a realistic selection and only bounds a client bug.
+MAX_IDS_PER_REQUEST = 2000
 
 
 class DiscoverPreviewIn(BaseModel):
@@ -256,3 +275,90 @@ def preview(req: DiscoverPreviewIn) -> DiscoverPreviewOut:
     if not req.character:
         raise HTTPException(status_code=422, detail="datacat: `character` is required")
     return _datacat_preview(req)
+
+
+# ---------------------------------------------------------------------------
+# The ignore list -- cards you have decided against
+# ---------------------------------------------------------------------------
+
+
+def _ignored_store() -> ignored_state.IgnoredStore:
+    """Built per call so a test that repoints `settings.ignored_file` -- or an
+    operator who moves the archive -- is honoured rather than captured at
+    import time. The same construction `system.py:_settings_store` uses."""
+    return ignored_state.IgnoredStore(settings.ignored_file)
+
+
+class IgnoredOut(BaseModel):
+    """Every ignored id, keyed by provider."""
+
+    ignored: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Provider name to its ignored provider-ids, sorted. A provider with nothing ignored is absent rather than empty.",
+    )
+
+
+class IgnoreIn(BaseModel):
+    provider: Provider
+    ids: list[str] = Field(
+        description="The provider's own ids for the cards, not the archive's `_<id8>` fragments. Blanks and duplicates are dropped; ignoring a card already ignored is a no-op, not an error.",
+    )
+
+
+class IgnoreOut(BaseModel):
+    provider: str
+    added: int = Field(description="How many of the given ids were not already ignored.")
+    ids: list[str] = Field(description="The provider's whole bucket after the write, so the client can update without re-reading.")
+
+
+@router.get(
+    "/discover/ignored",
+    response_model=IgnoredOut,
+    summary="Every provider card marked “don’t want”",
+)
+def get_ignored() -> IgnoredOut:
+    """The whole ignore list, fetched once and matched locally.
+
+    The peer of `GET /characters/have-fragments`, and asked for the same way
+    and for the same reason: Discover holds one set per provider in memory and
+    tests each row against it as the grid pages, rather than asking the server
+    about an ever-growing list of loaded ids on every scroll tick.
+
+    The two sets are kept separate on the wire although the grid concatenates
+    them. Folding ignores into the fragment set would hide the same cards with
+    no client change at all -- and would make a tile you do not own read
+    "Have", and the "N already in the archive" count say something untrue.
+    """
+    try:
+        return IgnoredOut(ignored=_ignored_store().read())
+    except ignored_state.IgnoredError as exc:
+        # 500 rather than an empty map, for `get_settings`' reason: `{}` would
+        # look like "nothing ignored", and the next ignore would write a fresh
+        # list over however many decisions the damaged file holds.
+        logger.error("ignore list unreadable: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post(
+    "/discover/ignored",
+    response_model=IgnoreOut,
+    summary="Mark provider cards “don’t want”",
+)
+def add_ignored(body: IgnoreIn) -> IgnoreOut:
+    """Add ids to one provider's bucket.
+
+    There is no route to take one back out, and that is the design rather than
+    an omission -- turning "Hide cards I have" off shows every ignored card
+    again, and acquiring one makes it a card you have. See
+    `proxy.state.ignored`'s module docstring.
+    """
+    if len(body.ids) > MAX_IDS_PER_REQUEST:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{len(body.ids)} ids in one request, over the {MAX_IDS_PER_REQUEST}-id ceiling",
+        )
+    try:
+        added, ids = _ignored_store().add(body.provider, body.ids)
+    except ignored_state.IgnoredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return IgnoreOut(provider=body.provider, added=added, ids=ids)
