@@ -7,30 +7,52 @@
 # patched by hand. The npm entry covers the frontend that same commit added,
 # which never had coverage at all.
 #
-# Security updates are separate and always run regardless of what's listed
-# here; these entries are the routine version bumps.
+# The shape, and why:
+#
+#   - Version updates for uv, npm and github-actions share ONE multi-ecosystem
+#     group, so a week's bumps arrive as a single PR instead of one per
+#     ecosystem.
+#   - Security updates can't join that group (multi-ecosystem groups are
+#     version-updates only) and otherwise open one PR per vulnerable package --
+#     four at once on 2026-10-01, all transitive dev dependencies. The
+#     `applies-to: security-updates` group on each entry folds them into one PR
+#     per ecosystem.
+#   - dependabot-automerge.yml merges all of the above once the required checks
+#     pass. Docker is the exception; see the bottom of this file.
 version: 2
-updates:
-  # Python — uv resolves from pyproject.toml and writes uv.lock.
-  #
-  # Batch all Python dependency updates into a single PR.
-  - package-ecosystem: uv
-    directory: /
+
+multi-ecosystem-groups:
+  dependencies:
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+
+updates:
+  # Python — uv resolves from pyproject.toml and writes uv.lock.
+  - package-ecosystem: uv
+    directory: /
+    # `patterns` is required on every member of a multi-ecosystem group.
+    patterns: ['*']
+    multi-ecosystem-group: dependencies
+    # Nobody reviews these PRs before they merge, so wait a week after a
+    # release: time for a compromised or broken version to be yanked upstream.
+    # Security updates ignore the cooldown.
+    cooldown:
+      default-days: 7
     groups:
-      python-dependencies:
+      python-security:
+        applies-to: security-updates
         patterns: ['*']
 
   # React frontend.
   - package-ecosystem: npm
     directory: /frontend
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
+    patterns: ['*']
+    multi-ecosystem-group: dependencies
+    cooldown:
+      default-days: 7
     groups:
-      frontend-dependencies:
+      frontend-security:
+        applies-to: security-updates
         patterns: ['*']
     ignore:
       # openapi-typescript peers on TS ^5 and crashes on 7 (`ts.factory`
@@ -43,15 +65,25 @@ updates:
       # fixed release still comes through.
       - dependency-name: jsdom
         versions: ['30.1.x']
+
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
+    patterns: ['*']
+    multi-ecosystem-group: dependencies
+    cooldown:
+      default-days: 7
     groups:
-      github-actions:
+      github-actions-security:
+        applies-to: security-updates
         patterns: ['*']
 
   # Base image in the published container.
+  #
+  # Deliberately outside the group and NOT auto-merged. Every update here is a
+  # runtime major (node 24 -> 25, python 3.13 -> 3.14), and no required check
+  # builds the image or runs the tests on it, so a green PR says nothing about
+  # whether the container still works. These stay a hand-merged PR, a few
+  # times a year.
   - package-ecosystem: docker
     directory: /
     schedule:
