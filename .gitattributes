@@ -1,0 +1,29 @@
+# Normalize line endings on checkin; check out with LF everywhere.
+* text=auto eol=lf
+
+# Lockfiles are generated. Suppress them from diffs and from language stats so
+# a dependency bump doesn't bury the real change in a review.
+uv.lock                     -diff linguist-generated
+frontend/package-lock.json  -diff linguist-generated
+
+# The vendored tag dictionary is generated, not hand-edited.
+frontend/src/lib/tags/tag-dictionary.json  -diff linguist-generated
+
+# Captured provider payloads and card JSON: real fixtures, not source. They are
+# long and machine-shaped, so keep them out of the language stats.
+tests/fixtures/**  linguist-generated
+
+# Shell scripts and Dockerfiles break with CRLF.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+
+# Userscripts are source, not vendored libraries.
+userscript/**/*.js  linguist-detectable
+
+# Binary assets -- never diff, never eol-convert.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.ico   binary
+*.zip   binary
