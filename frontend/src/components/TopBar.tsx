@@ -18,11 +18,12 @@ const TABS = [
   { to: '/', label: 'Characters' },
   { to: '/favorites', label: 'Favorites' },
   { to: '/discover', label: 'Discover' },
+  { to: '/lore', label: 'Lorebooks' },
   { to: '/tools', label: 'Tools' },
 ]
 
 /**
- * The fixed top bar: brand, the four tabs, the search pill, settings.
+ * The fixed top bar: brand, the tabs, the search pill, settings.
  *
  * No Activity bell — dropped with the feed it opened (docs/UI_REWRITE_PLAN.md
  * §3.6). The Import ＋ opens the add-to-archive menu (Stage 3).

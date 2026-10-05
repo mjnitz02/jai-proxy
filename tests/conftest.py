@@ -133,6 +133,10 @@ def archive_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, P
     # browsing, with nothing in the UI to undo it.
     dirs["ignored"] = tmp_path / "ignored.json"
     monkeypatch.setattr(settings, "ignored_file", dirs["ignored"])
+    # And for lorebook decisions: the merge and choose routes write, and the
+    # real file holds judgements nothing else on disk can reproduce.
+    dirs["lorebook_decisions"] = tmp_path / "lorebooks.json"
+    monkeypatch.setattr(settings, "lorebook_decisions_file", dirs["lorebook_decisions"])
     # The index and the thumbnail store are process-wide singletons bound at
     # import time; both have to be re-pointed or a test reads the real 3 GB
     # archive on the developer's machine and passes for the wrong reason.

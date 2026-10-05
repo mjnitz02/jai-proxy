@@ -6,6 +6,10 @@ import { ToolsPage } from '@/pages/ToolsPage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
 import { DiscoverPreviewPage } from '@/pages/DiscoverPreviewPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { LorebooksPage } from '@/pages/LorebooksPage'
+import { LorebookDetailPage } from '@/pages/LorebookDetailPage'
+import { LorebookEntriesPage } from '@/pages/LorebookEntriesPage'
+import { LorebookEntryPage } from '@/pages/LorebookEntryPage'
 
 /**
  * The route table (docs/UI_REWRITE_PLAN.md §4.1) — every stage's route now
@@ -29,6 +33,14 @@ export default function App() {
           path="/discover/:provider/:id"
           element={<DiscoverPreviewPage />}
         />
+        {/* Lorebooks as entities, derived from the cards that embed them. At
+            `/lore`, not `/lorebooks`: the server owns that prefix (the
+            userscripts' `POST /lorebooks/existing`), and its catch-all 404s
+            inside a server-owned prefix rather than serving the shell. */}
+        <Route path="/lore" element={<LorebooksPage />} />
+        <Route path="/lore/entries" element={<LorebookEntriesPage />} />
+        <Route path="/lore/entries/:id" element={<LorebookEntryPage />} />
+        <Route path="/lore/:id" element={<LorebookDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/:section" element={<SettingsPage />} />
         <Route path="*" element={<NotYet />} />

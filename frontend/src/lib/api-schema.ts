@@ -1298,6 +1298,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lorebooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every distinct lorebook in the archive */
+        get: operations["list_lorebooks_api_v1_lorebooks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Entries across every lorebook, one row per entry however many versions it has */
+        get: operations["list_entries_api_v1_lorebooks_entries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/entries/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One entry: every version of its text, and which cards hold each */
+        get: operations["get_entry_api_v1_lorebooks_entries__entry_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/entries/{entry_id}/chosen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose the version of an entry every card should carry */
+        put: operations["choose_version_api_v1_lorebooks_entries__entry_id__chosen_put"];
+        post?: never;
+        /** Clear an entry's chosen version */
+        delete: operations["clear_version_api_v1_lorebooks_entries__entry_id__chosen_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/entries/{entry_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Declare two entries of one lorebook to be versions of the same entry */
+        post: operations["merge_entries_api_v1_lorebooks_entries__entry_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/entries/merges/{merge_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Undo an entry merge */
+        delete: operations["unmerge_entries_api_v1_lorebooks_entries_merges__merge_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/{lorebook_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Declare two lorebooks to be the same book */
+        post: operations["merge_lorebooks_api_v1_lorebooks__lorebook_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/merges/{merge_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Undo a lorebook merge */
+        delete: operations["unmerge_lorebooks_api_v1_lorebooks_merges__merge_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/{lorebook_id}/choose-newest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose the newest version of every entry that has none chosen
+         * @description "Newest" is the version on the most recently created card -- the same
+         *     guess the pages label as one. Entries already decided are left alone.
+         */
+        post: operations["choose_newest_api_v1_lorebooks__lorebook_id__choose_newest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lorebooks/{lorebook_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One lorebook: its revisions, entries, and the lorebooks it overlaps */
+        get: operations["get_lorebook_api_v1_lorebooks__lorebook_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/characters/{card_id}/lorebooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The lorebooks a card's embedded book was assembled from, in entry order */
+        get: operations["card_lorebooks_api_v1_characters__card_id__lorebooks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/datacat/health": {
         parameters: {
             query?: never;
@@ -2121,6 +2313,37 @@ export interface components {
             items: components["schemas"]["CardOut"][];
         };
         /**
+         * CardLorebookOut
+         * @description One of the lorebooks a card's embedded book was assembled from.
+         */
+        CardLorebookOut: {
+            /** Lorebook Id */
+            lorebook_id: string;
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Entry Count */
+            entry_count: number;
+            /**
+             * Card Count
+             * @description Cards carrying this lorebook, this one included.
+             */
+            card_count: number;
+            /**
+             * Revision
+             * @description Fingerprint of the copy this card holds.
+             */
+            revision: string;
+            /**
+             * Is Newest
+             * @description Whether that copy is the lorebook's newest revision.
+             */
+            is_newest: boolean;
+            /** Revision Count */
+            revision_count: number;
+        };
+        /**
          * CardOut
          * @description A card as the browse grid sees it: metadata, counts, and no prose.
          *
@@ -2855,6 +3078,223 @@ export interface components {
             /** Seconds */
             seconds: number;
         };
+        /**
+         * LorebookCardOut
+         * @description A card that carries a lorebook -- enough for a tile and a link.
+         */
+        LorebookCardOut: {
+            /**
+             * Id
+             * @description The card's filename on disk.
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Creator */
+            creator: string;
+            /** Create Date */
+            create_date: string;
+            /** Thumb Url */
+            thumb_url: string;
+        };
+        /** LorebookChooseIn */
+        LorebookChooseIn: {
+            /**
+             * Hash
+             * @description The version every card should carry -- one of the entry's own.
+             */
+            hash: string;
+        };
+        /** LorebookChooseNewestOut */
+        LorebookChooseNewestOut: {
+            /**
+             * Chosen
+             * @description Entries that had no version chosen and now have their newest one.
+             */
+            chosen: number;
+        };
+        /** LorebookDetailOut */
+        LorebookDetailOut: {
+            /**
+             * Id
+             * @description Derived from the provider's id where the importer stamped one, else from the entries themselves. Stable while the cards are.
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kinds
+             * @description How its copies were recovered: `janitor` (split out by script id), `chub` (linked project) or `embedded` (no provider id, matched on content alone).
+             */
+            kinds: string[];
+            /**
+             * Refs
+             * @description Provider identities, e.g. `jai:<script id>`, `chub:lorebooks/<creator>/<slug>`.
+             */
+            refs: string[];
+            /**
+             * Creators
+             * @description Creators of the cards carrying it, most common first.
+             */
+            creators: string[];
+            /** Card Count */
+            card_count: number;
+            /**
+             * Entry Count
+             * @description Entry lines -- one per entry, however many versions it has.
+             */
+            entry_count: number;
+            /**
+             * Revision Count
+             * @description Distinct entry-sets among the cards' copies.
+             */
+            revision_count: number;
+            /**
+             * Changed Entries
+             * @description Entries with more than one version across the copies.
+             */
+            changed_entries: number;
+            /**
+             * Similar Count
+             * @description Other lorebooks sharing entries with this one -- merge candidates.
+             */
+            similar_count: number;
+            /**
+             * Unresolved Entries
+             * @description Changed entries with no version chosen yet.
+             */
+            unresolved_entries: number;
+            /**
+             * Pending Cards
+             * @description Cards holding a version other than the chosen one -- what a sync would rewrite.
+             */
+            pending_cards: number;
+            /** Chars */
+            chars: number;
+            /** Revisions */
+            revisions: components["schemas"]["LorebookRevisionOut"][];
+            /** Entries */
+            entries: components["schemas"]["LorebookEntryOut"][];
+            /** Similar */
+            similar: components["schemas"]["LorebookSimilarOut"][];
+            /**
+             * Merges
+             * @description Manual merges that make up this lorebook.
+             */
+            merges: components["schemas"]["LorebookMergeOut"][];
+        };
+        /** LorebookEntriesOut */
+        LorebookEntriesOut: {
+            /** Entries */
+            entries: components["schemas"]["LorebookEntryOut"][];
+            /**
+             * Total
+             * @description Matches before `limit`/`offset`.
+             */
+            total: number;
+        };
+        /**
+         * LorebookEntryCandidateOut
+         * @description Another entry of the same lorebook that may be this one under a
+         *     different title: the two never appear on the same card and their text is
+         *     alike. A suggestion to review, not a finding.
+         */
+        LorebookEntryCandidateOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Preview */
+            preview: string;
+            /**
+             * Similarity
+             * @description difflib ratio over the two entries' newest text, 0-1.
+             */
+            similarity: number;
+            /** Version Count */
+            version_count: number;
+            /** Card Count */
+            card_count: number;
+        };
+        /** LorebookEntryDetailOut */
+        LorebookEntryDetailOut: {
+            /** Id */
+            id: string;
+            /** Lorebook Id */
+            lorebook_id: string;
+            /** Lorebook Name */
+            lorebook_name: string;
+            /** Title */
+            title: string;
+            /** Versions */
+            versions: components["schemas"]["LorebookEntryVersionOut"][];
+            /**
+             * Chosen
+             * @description Hash of the chosen version, or empty.
+             * @default
+             */
+            chosen: string;
+            /** Merges */
+            merges?: components["schemas"]["LorebookMergeOut"][];
+            /** Candidates */
+            candidates?: components["schemas"]["LorebookEntryCandidateOut"][];
+        };
+        /**
+         * LorebookEntryOut
+         * @description An entry line in a list: its newest version's text, previewed.
+         */
+        LorebookEntryOut: {
+            /** Id */
+            id: string;
+            /** Lorebook Id */
+            lorebook_id: string;
+            /** Lorebook Name */
+            lorebook_name: string;
+            /** Title */
+            title: string;
+            /** Keys */
+            keys: string[];
+            /** Constant */
+            constant: boolean;
+            /** Preview */
+            preview: string;
+            /** Chars */
+            chars: number;
+            /** Version Count */
+            version_count: number;
+            /** Card Count */
+            card_count: number;
+            /**
+             * Resolved
+             * @description One version, or one chosen -- nothing left to decide.
+             */
+            resolved: boolean;
+            /**
+             * Pending Cards
+             * @description Cards holding a version other than the chosen one.
+             * @default 0
+             */
+            pending_cards: number;
+        };
+        /** LorebookEntryVersionOut */
+        LorebookEntryVersionOut: {
+            /** Hash */
+            hash: string;
+            /** Title */
+            title: string;
+            /** Keys */
+            keys: string[];
+            /** Secondary Keys */
+            secondary_keys: string[];
+            /** Constant */
+            constant: boolean;
+            /** Content */
+            content: string;
+            /** Newest */
+            newest: string;
+            /** Cards */
+            cards: components["schemas"]["LorebookCardOut"][];
+        };
         /** LorebookExistingRequest */
         LorebookExistingRequest: {
             /** Source */
@@ -2868,6 +3308,180 @@ export interface components {
             cached?: string[];
             /** Missing */
             missing?: string[];
+        };
+        /** LorebookMergeIn */
+        LorebookMergeIn: {
+            /**
+             * Into
+             * @description The id of the lorebook (or entry) to merge with.
+             */
+            into: string;
+        };
+        /**
+         * LorebookMergeOut
+         * @description A merge the user declared, as the undo list shows it.
+         */
+        LorebookMergeOut: {
+            /** Id */
+            id: string;
+            /**
+             * A Name
+             * @default
+             */
+            a_name: string;
+            /**
+             * B Name
+             * @default
+             */
+            b_name: string;
+            /**
+             * At
+             * @default
+             */
+            at: string;
+        };
+        /**
+         * LorebookOut
+         * @description A lorebook as the browse list sees it: one row per distinct book,
+         *     however many cards embed a copy.
+         */
+        LorebookOut: {
+            /**
+             * Id
+             * @description Derived from the provider's id where the importer stamped one, else from the entries themselves. Stable while the cards are.
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kinds
+             * @description How its copies were recovered: `janitor` (split out by script id), `chub` (linked project) or `embedded` (no provider id, matched on content alone).
+             */
+            kinds: string[];
+            /**
+             * Refs
+             * @description Provider identities, e.g. `jai:<script id>`, `chub:lorebooks/<creator>/<slug>`.
+             */
+            refs: string[];
+            /**
+             * Creators
+             * @description Creators of the cards carrying it, most common first.
+             */
+            creators: string[];
+            /** Card Count */
+            card_count: number;
+            /**
+             * Entry Count
+             * @description Entry lines -- one per entry, however many versions it has.
+             */
+            entry_count: number;
+            /**
+             * Revision Count
+             * @description Distinct entry-sets among the cards' copies.
+             */
+            revision_count: number;
+            /**
+             * Changed Entries
+             * @description Entries with more than one version across the copies.
+             */
+            changed_entries: number;
+            /**
+             * Similar Count
+             * @description Other lorebooks sharing entries with this one -- merge candidates.
+             */
+            similar_count: number;
+            /**
+             * Unresolved Entries
+             * @description Changed entries with no version chosen yet.
+             */
+            unresolved_entries: number;
+            /**
+             * Pending Cards
+             * @description Cards holding a version other than the chosen one -- what a sync would rewrite.
+             */
+            pending_cards: number;
+            /** Chars */
+            chars: number;
+        };
+        /** LorebookRefOut */
+        LorebookRefOut: {
+            /**
+             * Id
+             * @description The id of the result. A merge changes ids, so follow this rather than the one sent.
+             */
+            id: string;
+        };
+        /**
+         * LorebookRevisionOut
+         * @description One distinct entry-set of a lorebook, and the cards holding it. Ordered
+         *     newest-first by the cards' creation dates -- a guess at recency, since
+         *     entries carry no timestamp of their own.
+         */
+        LorebookRevisionOut: {
+            /** Fingerprint */
+            fingerprint: string;
+            /** Entry Count */
+            entry_count: number;
+            /** Newest */
+            newest: string;
+            /** Cards */
+            cards: components["schemas"]["LorebookCardOut"][];
+        };
+        /** LorebookSimilarOut */
+        LorebookSimilarOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Card Count */
+            card_count: number;
+            /** Entry Count */
+            entry_count: number;
+            /** Shared */
+            shared: number;
+            /**
+             * Relation
+             * @description `subset`: this lorebook is wholly contained in the other. `superset`: the reverse.
+             * @enum {string}
+             */
+            relation: "subset" | "superset" | "overlap";
+        };
+        /** LorebookStatsOut */
+        LorebookStatsOut: {
+            /**
+             * Cards
+             * @description Cards carrying at least one lorebook entry.
+             */
+            cards: number;
+            /** Lorebooks */
+            lorebooks: number;
+            /**
+             * Shared Lorebooks
+             * @description Lorebooks carried by more than one card.
+             */
+            shared_lorebooks: number;
+            /**
+             * Entries Embedded
+             * @description Entries across every card's copy.
+             */
+            entries_embedded: number;
+            /**
+             * Entries Unique
+             * @description Distinct entry versions.
+             */
+            entries_unique: number;
+            /** Changed Entries */
+            changed_entries: number;
+            /** Unresolved Entries */
+            unresolved_entries: number;
+            /** Pending Cards */
+            pending_cards: number;
+        };
+        /** LorebooksOut */
+        LorebooksOut: {
+            /** Lorebooks */
+            lorebooks: components["schemas"]["LorebookOut"][];
+            stats: components["schemas"]["LorebookStatsOut"];
         };
         /**
          * MediaBytesOut
@@ -5360,6 +5974,385 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DuplicatesOut"];
+                };
+            };
+        };
+    };
+    list_lorebooks_api_v1_lorebooks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebooksOut"];
+                };
+            };
+        };
+    };
+    list_entries_api_v1_lorebooks_entries_get: {
+        parameters: {
+            query?: {
+                /** @description Matches title, keys and text, case-insensitively. */
+                q?: string;
+                /** @description Only this lorebook's entries. */
+                lorebook?: string;
+                /** @description Only entries with more than one version. */
+                changed?: boolean;
+                /** @description Only changed entries with no version chosen yet. */
+                unresolved?: boolean;
+                sort?: "versions" | "cards" | "title";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookEntriesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entry_api_v1_lorebooks_entries__entry_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookEntryDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    choose_version_api_v1_lorebooks_entries__entry_id__chosen_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LorebookChooseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookRefOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_version_api_v1_lorebooks_entries__entry_id__chosen_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookRefOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_entries_api_v1_lorebooks_entries__entry_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LorebookMergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookRefOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmerge_entries_api_v1_lorebooks_entries_merges__merge_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                merge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_lorebooks_api_v1_lorebooks__lorebook_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LorebookMergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookRefOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmerge_lorebooks_api_v1_lorebooks_merges__merge_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                merge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    choose_newest_api_v1_lorebooks__lorebook_id__choose_newest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookChooseNewestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_lorebook_api_v1_lorebooks__lorebook_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lorebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LorebookDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    card_lorebooks_api_v1_characters__card_id__lorebooks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                card_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardLorebookOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -825,3 +825,181 @@ class UserscriptOut(BaseModel):
     filename: str
     source: str
     bytes: int
+
+
+# ---------------------------------------------------------------------------
+# Lorebooks -- derived from the cards, see proxy/archive/lorebooks.py
+# ---------------------------------------------------------------------------
+
+
+class LorebookCardOut(BaseModel):
+    """A card that carries a lorebook -- enough for a tile and a link."""
+
+    id: str = Field(description="The card's filename on disk.")
+    name: str
+    creator: str
+    create_date: str
+    thumb_url: str
+
+
+class LorebookOut(BaseModel):
+    """A lorebook as the browse list sees it: one row per distinct book,
+    however many cards embed a copy."""
+
+    id: str = Field(
+        description="Derived from the provider's id where the importer stamped one, else from the entries themselves. Stable while the cards are."
+    )
+    name: str
+    kinds: list[str] = Field(
+        description="How its copies were recovered: `janitor` (split out by script id), `chub` (linked project) or `embedded` (no provider id, matched on content alone)."
+    )
+    refs: list[str] = Field(description="Provider identities, e.g. `jai:<script id>`, `chub:lorebooks/<creator>/<slug>`.")
+    creators: list[str] = Field(description="Creators of the cards carrying it, most common first.")
+    card_count: int
+    entry_count: int = Field(description="Entry lines -- one per entry, however many versions it has.")
+    revision_count: int = Field(description="Distinct entry-sets among the cards' copies.")
+    changed_entries: int = Field(description="Entries with more than one version across the copies.")
+    similar_count: int = Field(description="Other lorebooks sharing entries with this one -- merge candidates.")
+    unresolved_entries: int = Field(description="Changed entries with no version chosen yet.")
+    pending_cards: int = Field(description="Cards holding a version other than the chosen one -- what a sync would rewrite.")
+    chars: int
+
+
+class LorebookStatsOut(BaseModel):
+    cards: int = Field(description="Cards carrying at least one lorebook entry.")
+    lorebooks: int
+    shared_lorebooks: int = Field(description="Lorebooks carried by more than one card.")
+    entries_embedded: int = Field(description="Entries across every card's copy.")
+    entries_unique: int = Field(description="Distinct entry versions.")
+    changed_entries: int
+    unresolved_entries: int
+    pending_cards: int
+
+
+class LorebooksOut(BaseModel):
+    lorebooks: list[LorebookOut]
+    stats: LorebookStatsOut
+
+
+class LorebookRevisionOut(BaseModel):
+    """One distinct entry-set of a lorebook, and the cards holding it. Ordered
+    newest-first by the cards' creation dates -- a guess at recency, since
+    entries carry no timestamp of their own."""
+
+    fingerprint: str
+    entry_count: int
+    newest: str
+    cards: list[LorebookCardOut]
+
+
+class LorebookEntryOut(BaseModel):
+    """An entry line in a list: its newest version's text, previewed."""
+
+    id: str
+    lorebook_id: str
+    lorebook_name: str
+    title: str
+    keys: list[str]
+    constant: bool
+    preview: str
+    chars: int
+    version_count: int
+    card_count: int
+    resolved: bool = Field(description="One version, or one chosen -- nothing left to decide.")
+    pending_cards: int = Field(default=0, description="Cards holding a version other than the chosen one.")
+
+
+class LorebookSimilarOut(BaseModel):
+    id: str
+    name: str
+    card_count: int
+    entry_count: int
+    shared: int
+    relation: Literal["subset", "superset", "overlap"] = Field(
+        description="`subset`: this lorebook is wholly contained in the other. `superset`: the reverse."
+    )
+
+
+class LorebookMergeOut(BaseModel):
+    """A merge the user declared, as the undo list shows it."""
+
+    id: str
+    a_name: str = ""
+    b_name: str = ""
+    at: str = ""
+
+
+class LorebookDetailOut(LorebookOut):
+    revisions: list[LorebookRevisionOut]
+    entries: list[LorebookEntryOut]
+    similar: list[LorebookSimilarOut]
+    merges: list[LorebookMergeOut] = Field(description="Manual merges that make up this lorebook.")
+
+
+class LorebookEntryCandidateOut(BaseModel):
+    """Another entry of the same lorebook that may be this one under a
+    different title: the two never appear on the same card and their text is
+    alike. A suggestion to review, not a finding."""
+
+    id: str
+    title: str
+    preview: str
+    similarity: float = Field(description="difflib ratio over the two entries' newest text, 0-1.")
+    version_count: int
+    card_count: int
+
+
+class LorebookMergeIn(BaseModel):
+    into: str = Field(description="The id of the lorebook (or entry) to merge with.")
+
+
+class LorebookChooseIn(BaseModel):
+    hash: str = Field(description="The version every card should carry -- one of the entry's own.")
+
+
+class LorebookRefOut(BaseModel):
+    id: str = Field(description="The id of the result. A merge changes ids, so follow this rather than the one sent.")
+
+
+class LorebookChooseNewestOut(BaseModel):
+    chosen: int = Field(description="Entries that had no version chosen and now have their newest one.")
+
+
+class LorebookEntryVersionOut(BaseModel):
+    hash: str
+    title: str
+    keys: list[str]
+    secondary_keys: list[str]
+    constant: bool
+    content: str
+    newest: str
+    cards: list[LorebookCardOut]
+
+
+class LorebookEntryDetailOut(BaseModel):
+    id: str
+    lorebook_id: str
+    lorebook_name: str
+    title: str
+    versions: list[LorebookEntryVersionOut]
+    chosen: str = Field(default="", description="Hash of the chosen version, or empty.")
+    merges: list[LorebookMergeOut] = Field(default_factory=list)
+    candidates: list[LorebookEntryCandidateOut] = Field(default_factory=list)
+
+
+class LorebookEntriesOut(BaseModel):
+    entries: list[LorebookEntryOut]
+    total: int = Field(description="Matches before `limit`/`offset`.")
+
+
+class CardLorebookOut(BaseModel):
+    """One of the lorebooks a card's embedded book was assembled from."""
+
+    lorebook_id: str
+    name: str
+    kind: str
+    entry_count: int
+    card_count: int = Field(description="Cards carrying this lorebook, this one included.")
+    revision: str = Field(description="Fingerprint of the copy this card holds.")
+    is_newest: bool = Field(description="Whether that copy is the lorebook's newest revision.")
+    revision_count: int

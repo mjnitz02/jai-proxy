@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # job is to grow, and settings.json is rewritten whole on every save with
     # the provider tokens riding along. See proxy/state/ignored.py.
     ignored_file: Path = ROOT / "data" / "ignored.json"
+    # Judgements about lorebooks -- which are the same book, which entry
+    # version is the one to keep. User data for the same reason as the ignore
+    # list: nothing else on disk can reproduce a decision. See
+    # proxy/state/lorebook_decisions.py.
+    lorebook_decisions_file: Path = ROOT / "data" / "lorebooks.json"
 
     # Server-side working state, kept beside the archive rather than inside it:
     # `data/` is the one directory that has to be mounted (and backed up), and
