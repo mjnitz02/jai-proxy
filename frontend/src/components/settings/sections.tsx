@@ -19,7 +19,12 @@ import {
   useCancelMediaJob,
   useMediaJob,
 } from '@/hooks/use-bulk-media'
-import { useLogout, useSecurity, useUpdateSecurity } from '@/hooks/use-auth'
+import {
+  useApiToken,
+  useLogout,
+  useSecurity,
+  useUpdateSecurity,
+} from '@/hooks/use-auth'
 import { useArchiveStats } from '@/hooks/use-characters'
 import { useDatacatFollows } from '@/hooks/use-discover'
 import {
@@ -36,6 +41,7 @@ import {
   type DatacatSessionState,
 } from '@/lib/providers/datacat'
 import { formatBytes } from '@/lib/card'
+import { copyText } from '@/lib/clipboard'
 import { SORTS } from '@/lib/browse'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -64,6 +70,7 @@ export function SecuritySection() {
   const security = useSecurity()
   const save = useUpdateSecurity()
   const logout = useLogout()
+  const token = useApiToken()
   const stored = security.data
 
   const [enabledDraft, setEnabledDraft] = useState<boolean | null>(null)
@@ -124,6 +131,79 @@ export function SecuritySection() {
           className={field}
         />
       </OptionRow>
+      <OptionRow
+        label="API token"
+        hint={
+          stored?.api_token
+            ? 'Built into the bridges Settings → Userscripts generates.'
+            : 'Lets the userscripts through without a login. None yet.'
+        }
+      >
+        {stored?.api_token && (
+          <>
+            <input
+              readOnly
+              value={stored.api_token}
+              onFocus={(e) => e.target.select()}
+              className={cn(field, 'font-mono text-[11.5px]')}
+            />
+            <button
+              type="button"
+              title="Copy"
+              onClick={() =>
+                void copyText(stored.api_token!).then((ok) =>
+                  ok
+                    ? toast('Token copied.')
+                    : toast('Could not copy the token.', 'bad'),
+                )
+              }
+              className="flex size-[31px] items-center justify-center rounded-lg border border-line text-muted hover:border-white/20 hover:text-text"
+            >
+              <Copy className="size-3.5" />
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          disabled={!stored || token.isPending}
+          onClick={() =>
+            token.mutate(
+              {},
+              {
+                onSuccess: () =>
+                  toast(
+                    stored?.api_token
+                      ? 'New token — regenerate and reinstall the userscripts.'
+                      : 'Token generated — generate the userscripts to pick it up.',
+                  ),
+                onError: (err) => toast(err.message, 'bad'),
+              },
+            )
+          }
+          className="flex h-[31px] items-center gap-1.5 rounded-lg border border-line px-3 text-[12.5px] text-muted hover:border-white/20 hover:text-text disabled:opacity-60"
+        >
+          <RefreshCw className="size-3.5" />
+          {stored?.api_token ? 'Regenerate' : 'Generate'}
+        </button>
+        {stored?.api_token && (
+          <button
+            type="button"
+            disabled={token.isPending}
+            onClick={() =>
+              token.mutate(
+                { revoke: true },
+                {
+                  onSuccess: () => toast('Token revoked.'),
+                  onError: (err) => toast(err.message, 'bad'),
+                },
+              )
+            }
+            className="h-[31px] rounded-lg border border-line px-3 text-[12.5px] text-muted hover:border-bad/40 hover:text-bad disabled:opacity-60"
+          >
+            Revoke
+          </button>
+        )}
+      </OptionRow>
       <div className="py-[13px]">
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -175,9 +255,8 @@ export function SecuritySection() {
           )}
         </div>
         <p className="mt-2.5 text-[11.5px] text-faint">
-          Saving new credentials logs out every other browser. The userscripts
-          need the same credentials once this is on — see the note at the top of
-          each script. Locked out? Delete{' '}
+          Saving new credentials logs out every other browser; the API token
+          keeps working until it is regenerated or revoked. Locked out? Delete{' '}
           <span className="font-mono">data/security.json</span> on the server.
         </p>
       </div>
@@ -847,6 +926,8 @@ export function UserscriptsSection() {
   const [copied, setCopied] = useState(false)
 
   const active = specs.data?.find((s) => s.key === key) ?? specs.data?.[0]
+  const security = useSecurity()
+  const needsToken = security.data?.enabled && !security.data.api_token
 
   const generate = useMutation({
     mutationFn: () => {
@@ -959,6 +1040,18 @@ export function UserscriptsSection() {
                 Generate
               </button>
             </div>
+            {needsToken && (
+              <p className="text-[12px] text-bad">
+                Login is on and there is no API token, so this bridge would be
+                refused. Generate one under Security first.
+              </p>
+            )}
+            {generate.data?.includes_token && (
+              <p className="text-[12px] text-faint">
+                The API token is built in — nothing to set in Tampermonkey.
+                Treat the script like a password.
+              </p>
+            )}
             {generate.data && (
               <div className="rounded-xl border border-line-soft bg-raised">
                 <div className="flex items-center justify-between border-b border-line-soft px-3.5 py-2">
@@ -970,11 +1063,15 @@ export function UserscriptsSection() {
                     <button
                       type="button"
                       onClick={() => {
-                        void navigator.clipboard.writeText(
-                          generate.data!.source,
-                        )
-                        setCopied(true)
-                        setTimeout(() => setCopied(false), 1500)
+                        void copyText(generate.data!.source).then((ok) => {
+                          if (!ok)
+                            return toast(
+                              'Could not copy — use Download instead.',
+                              'bad',
+                            )
+                          setCopied(true)
+                          setTimeout(() => setCopied(false), 1500)
+                        })
                       }}
                       className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] text-muted hover:text-text"
                     >

@@ -68,6 +68,24 @@ export function useSecurity() {
   })
 }
 
+/**
+ * Issue (or, with `revoke`, drop) the API token the userscripts send in place
+ * of a login. Leaves the gate's other settings and this browser's session alone.
+ */
+export function useApiToken() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ revoke = false }: { revoke?: boolean } = {}) =>
+      unwrap(
+        revoke
+          ? apiClient.DELETE('/api/v1/security/token')
+          : apiClient.POST('/api/v1/security/token'),
+        'could not change the API token',
+      ),
+    onSuccess: (saved) => qc.setQueryData(['security'], saved),
+  })
+}
+
 export function useUpdateSecurity() {
   const qc = useQueryClient()
   return useMutation({

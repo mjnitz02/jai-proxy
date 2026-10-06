@@ -23,6 +23,15 @@ is an expiry time plus an HMAC over it -- so there is no session table to
 persist or sweep; replacing the secret is how every session is ended at once,
 which happens whenever the credentials change or the gate is switched off.
 
+And, optionally, one API token: a second way through the gate for the clients
+that cannot log in -- the two userscripts, which post from another site's page.
+That one *is* stored as issued, because Settings -> Userscripts bakes it into
+the script it generates and a hash could not be baked into anything. It sits
+beside `session_secret`, which is the same kind of thing: whoever can read this
+file can already mint a session. It outlives a password change on purpose (a
+new password should not mean reinstalling two userscripts) and ends when it is
+regenerated or revoked.
+
 LOCKED OUT
 Delete `data/security.json` (or set `"enabled": false` in it). The gate is off
 when the file is absent. A file that exists but cannot be parsed keeps the gate
@@ -40,7 +49,7 @@ import json
 import logging
 import secrets
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +68,8 @@ _SCRYPT = {"n": 2**14, "r": 8, "p": 1, "dklen": 32}
 SESSION_SECONDS = 30 * 24 * 60 * 60
 
 MAX_USERNAME = 128
+# Marks an API token as this server's, for whoever finds one in a script later.
+TOKEN_PREFIX = "jai_"
 MAX_PASSWORD = 1024
 
 
@@ -72,6 +83,7 @@ class GateConfig:
     username: str = ""
     password_hash: str = ""
     session_secret: str = ""
+    api_token: str = ""
     # The file exists but could not be read as a gate config. Closed, not open.
     damaged: bool = False
 
@@ -146,6 +158,7 @@ class SecurityStore:
                 username=str(blob.get("username") or ""),
                 password_hash=str(blob.get("password_hash") or ""),
                 session_secret=str(blob.get("session_secret") or ""),
+                api_token=str(blob.get("api_token") or ""),
             )
         except (OSError, ValueError) as exc:
             logger.error(
@@ -192,19 +205,35 @@ class SecurityStore:
             session_secret=current.session_secret
             if unchanged and current.session_secret
             else secrets.token_hex(32),
+            api_token=current.api_token,
         )
+        self._write(config)
+        return config
+
+    def set_api_token(self, *, revoke: bool = False) -> GateConfig:
+        """Issue a fresh API token, replacing any current one -- or, with
+        `revoke`, drop it. Nothing else about the gate changes, so browser
+        sessions carry on."""
+        current = self.config()
+        if current.damaged:
+            current = GateConfig()
+        config = replace(current, api_token="" if revoke else TOKEN_PREFIX + secrets.token_urlsafe(32))
+        self._write(config)
+        return config
+
+    def _write(self, config: GateConfig) -> None:
         payload = {
             "enabled": config.enabled,
             "username": config.username,
             "password_hash": config.password_hash,
             "session_secret": config.session_secret,
+            "api_token": config.api_token,
         }
         edit.write_atomic(self.path, json.dumps(payload, indent=2).encode("utf-8"))
         # Dropped rather than replaced: an mtime is only trustworthy when it
         # changed, and here the file is known to have.
         self._cached = None
         self._basic_ok.clear()
-        return config
 
     # -- checking --------------------------------------------------------------
 
@@ -218,9 +247,21 @@ class SecurityStore:
         password_ok = _password_matches(password, config.password_hash)
         return name_ok and password_ok
 
+    def check_token(self, header: str) -> bool:
+        """An `Authorization: Bearer <api token>` header -- the userscripts' way
+        in. No scrypt and no memo: the token is 256 random bits, not a password
+        someone chose."""
+        scheme, _, token = header.partition(" ")
+        if scheme.lower() != "bearer":
+            return False
+        config = self.config()
+        if not config.enabled or not config.api_token:
+            return False
+        return hmac.compare_digest(token.strip().encode("utf-8"), config.api_token.encode("utf-8"))
+
     def check_basic(self, header: str) -> bool:
-        """An `Authorization: Basic ...` header, for clients that cannot hold a
-        cookie -- the two userscripts, and anything scripted."""
+        """An `Authorization: Basic ...` header: the username and password
+        themselves, for anything scripted that would rather not hold a token."""
         scheme, _, encoded = header.partition(" ")
         if scheme.lower() != "basic":
             return False

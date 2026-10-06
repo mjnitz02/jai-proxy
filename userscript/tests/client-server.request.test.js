@@ -95,7 +95,7 @@ test("_request rejects on timeout", async () => {
   await assert.rejects(ServerClient.health(), /timeout/);
 });
 
-test("no Authorization header is sent unless a login is configured", async () => {
+test("no Authorization header is sent unless a token is baked in", async () => {
   const { ServerClient, calls } = load((opts) => {
     opts.onload({ status: 200, responseText: "{}" });
   });
@@ -103,11 +103,11 @@ test("no Authorization header is sent unless a login is configured", async () =>
   assert.equal("Authorization" in calls[0].headers, false);
 });
 
-test("a configured login rides on every request, for a server with its gate on", async () => {
+test("a baked-in token rides on every request, for a server with its gate on", async () => {
   const { ServerClient, calls } = load((opts) => {
     opts.onload({ status: 200, responseText: JSON.stringify({ existing: [] }) });
-  }, "Basic bWF0dDpodW50ZXIy");
+  }, "Bearer jai_abc123");
   await ServerClient.existing(["a"]);
-  assert.equal(calls[0].headers.Authorization, "Basic bWF0dDpodW50ZXIy");
+  assert.equal(calls[0].headers.Authorization, "Bearer jai_abc123");
   assert.equal(calls[0].headers["Content-Type"], "application/json");
 });

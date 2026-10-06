@@ -100,6 +100,18 @@ def jai_extensions(
     }
 
 
+@pytest.fixture(autouse=True)
+def _no_real_login_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep every test off the developer's own `data/security.json`.
+
+    `archive_dirs` repoints it too, but the tests that build their own
+    TestClient never ask for that fixture -- and with the gate switched on in
+    the real archive, each of them answers 401 for a reason unrelated to what it
+    is testing.
+    """
+    monkeypatch.setattr(settings, "security_file", tmp_path / "security.json")
+
+
 @pytest.fixture
 def archive_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     """An empty archive laid out exactly like `data/`, with settings pointed at

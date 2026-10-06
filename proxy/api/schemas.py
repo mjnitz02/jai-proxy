@@ -825,6 +825,9 @@ class UserscriptOut(BaseModel):
     filename: str
     source: str
     bytes: int
+    includes_token: bool = Field(
+        False, description="Whether the login gate's API token was baked in (Settings -> Security)."
+    )
 
 
 class SessionOut(BaseModel):
@@ -845,6 +848,9 @@ class SecurityOut(BaseModel):
     enabled: bool
     username: str
     has_password: bool
+    api_token: str | None = Field(
+        None, description="The token the userscripts send instead of logging in, if one has been generated."
+    )
 
 
 class SecurityIn(BaseModel):

@@ -17,6 +17,9 @@ Two constants are substituted, both in `config.js`:
   * `BULK_TAG_FILTER` -- the include/exclude tag filter the bulk sweep and the
     "hide saved" toggle apply. Only the JanitorAI bridge has one.
 
+A third, `DEFAULT_TOKEN`, is not the user's to type: it is the login gate's API
+token (Settings -> Security), which the server fills in when it has one.
+
 Substitution is anchored on the declarations themselves and raises if an anchor
 is missing, so renaming a constant in the source breaks the build loudly instead
 of silently emitting an unconfigured script.
@@ -111,6 +114,8 @@ class UserscriptError(Exception):
 # `const DEFAULT_SERVER = "...";` -- the string is the only capture that moves.
 _SERVER_RE = re.compile(r'(?P<head>const DEFAULT_SERVER = )"[^"]*";')
 
+_TOKEN_RE = re.compile(r'(?P<head>const DEFAULT_TOKEN = )"[^"]*";')
+
 # The whole `const BULK_TAG_FILTER = { ... };` block, closed by a `};` at the
 # declaration's own indentation. Matching on that rather than counting braces
 # keeps this readable and still safe: nothing else in the block is dedented that
@@ -167,6 +172,16 @@ def _apply_server(source: str, server_url: str) -> str:
     return patched
 
 
+def _apply_token(source: str, api_token: str) -> str:
+    # Interpolated into JavaScript, and read from a file that can be hand-edited.
+    if not re.fullmatch(r"[A-Za-z0-9_\-]+", api_token):
+        raise UserscriptError("the API token holds characters a token never has; regenerate it")
+    patched, count = _TOKEN_RE.subn(rf"\g<head>{json.dumps(api_token)};", source)
+    if count != 1:
+        raise UserscriptError(f"expected exactly one `const DEFAULT_TOKEN = \"...\";` in config.js, found {count}")
+    return patched
+
+
 def _apply_tag_filter(source: str, include: list[str], exclude: list[str]) -> str:
     def render(match: re.Match[str]) -> str:
         indent = match.group("indent")
@@ -186,7 +201,9 @@ def _apply_tag_filter(source: str, include: list[str], exclude: list[str]) -> st
     return patched
 
 
-def _config_note(spec: ScriptSpec, server_url: str, include: list[str], exclude: list[str]) -> str:
+def _config_note(
+    spec: ScriptSpec, server_url: str, include: list[str], exclude: list[str], has_token: bool
+) -> str:
     """A short comment recording what was baked in, so a script pasted into
     Tampermonkey months ago can still be read back."""
     lines = [
@@ -198,6 +215,8 @@ def _config_note(spec: ScriptSpec, server_url: str, include: list[str], exclude:
     if spec.supports_tag_filter:
         lines.append(f"//   include: {', '.join(include) if include else '(all cards)'}")
         lines.append(f"//   exclude: {', '.join(exclude) if exclude else '(nothing)'}")
+    if has_token:
+        lines.append("//   login:   API token included -- treat this file like a password")
     return "\n".join(lines)
 
 
@@ -207,13 +226,15 @@ def compile_userscript(
     server_url: str | None = None,
     include_tags: list[str] | None = None,
     exclude_tags: list[str] | None = None,
+    api_token: str | None = None,
 ) -> str:
     """The full `.user.js` for one bridge.
 
     With every override left as None the result is the plain source
     concatenation -- what `make compile` writes back into the repo. Pass any of
     them and the corresponding constant in `config.js` is replaced and a short
-    `GENERATED` note is added under the banner.
+    `GENERATED` note is added under the banner. `api_token` is the login gate's
+    token (Settings -> Security), sent as a Bearer header on every request.
 
     `include_tags`/`exclude_tags` are ignored for a bridge with no bulk sweep
     (saucepan); passing them is not an error, since the UI keeps one saved filter
@@ -225,8 +246,10 @@ def compile_userscript(
         except KeyError:
             raise UserscriptError(f"unknown userscript {spec!r}") from None
 
-    configured = server_url is not None or (
-        spec.supports_tag_filter and (include_tags is not None or exclude_tags is not None)
+    configured = (
+        server_url is not None
+        or api_token is not None
+        or (spec.supports_tag_filter and (include_tags is not None or exclude_tags is not None))
     )
     resolved_server = normalize_server_url(server_url) if server_url is not None else spec.default_server
     include = normalize_tags(include_tags)
@@ -234,7 +257,7 @@ def compile_userscript(
 
     banner = _read(spec, BANNER)
     if configured:
-        banner = f"{banner}\n{_config_note(spec, resolved_server, include, exclude)}"
+        banner = f"{banner}\n{_config_note(spec, resolved_server, include, exclude, api_token is not None)}"
 
     parts: list[str] = []
     for name in spec.modules:
@@ -242,6 +265,8 @@ def compile_userscript(
         if name == "config.js":
             if server_url is not None:
                 module = _apply_server(module, resolved_server)
+            if api_token is not None:
+                module = _apply_token(module, api_token)
             if spec.supports_tag_filter and (include_tags is not None or exclude_tags is not None):
                 module = _apply_tag_filter(module, include, exclude)
         parts.append(module)

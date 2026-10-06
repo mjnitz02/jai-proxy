@@ -52,22 +52,16 @@
   const SERVER = String(GM_getValue("serverUrl", "") || DEFAULT_SERVER).replace(/\/+$/, "");
 
   // If the server's login gate is on (Settings → Security), every request has
-  // to carry the same username and password. Stored the same way as the URL —
-  // run this once in the console on saucepan.ai and reload:
+  // to carry its API token. Nothing to set by hand: generate a token under
+  // Settings → Security, then generate this script under Settings → Userscripts
+  // and the token is filled in below. Regenerating the token means reinstalling
+  // the script.
   //
-  //   GM_setValue("serverLogin", "username:password")
-  //
-  // Unset, no credentials are sent, which is right for a server with the gate
-  // off (the default). With the gate on and this unset or wrong, the pill stays
+  // Empty, no credentials are sent, which is right for a server with the gate
+  // off (the default). With the gate on and this empty or stale, the pill stays
   // green — /health is open — and every other call fails with HTTP 401.
-  const SERVER_AUTH = (() => {
-    const login = String(GM_getValue("serverLogin", "") || "");
-    if (!login.includes(":")) return "";
-    // btoa takes Latin-1 only; go through the UTF-8 bytes so any password works.
-    let binary = "";
-    for (const byte of new TextEncoder().encode(login)) binary += String.fromCharCode(byte);
-    return "Basic " + btoa(binary);
-  })();
+  const DEFAULT_TOKEN = "";
+  const SERVER_AUTH = DEFAULT_TOKEN ? "Bearer " + DEFAULT_TOKEN : "";
   const SAUCEPAN_ORIGIN = "https://saucepan.ai";
 
   const TAG = "[saucepan-export]";

@@ -33,20 +33,14 @@ test("a trailing slash is stripped, since every call is SERVER + '/path'", () =>
   assert.equal(load("http://192.168.1.50:8000///").SERVER, "http://192.168.1.50:8000");
 });
 
-// The login gate's credentials (Settings -> Security), resolved the same way.
-function loadAuth(stored) {
-  const GM_getValue = (key, fallback) => (key === "serverLogin" ? stored : fallback);
-  return loadModules(["config.js"], ["SERVER_AUTH"], { GM_getValue, btoa, TextEncoder }).SERVER_AUTH;
-}
-
-test("no login stored means no credentials, which is what a server with the gate off wants", () => {
-  for (const unset of [undefined, "", "no-colon-so-not-a-login"]) {
-    assert.equal(loadAuth(unset), "");
-  }
-});
-
-test("a stored login becomes a Basic header, UTF-8 encoded", () => {
-  assert.equal(loadAuth("matt:hunter2"), "Basic " + Buffer.from("matt:hunter2").toString("base64"));
-  // btoa alone throws on anything outside Latin-1.
-  assert.equal(loadAuth("matt:pässwörd✓"), "Basic " + Buffer.from("matt:pässwörd✓").toString("base64"));
+// The login gate's API token (Settings -> Security) is baked in by the server's
+// compiler, never typed: the source ships it empty, and what the compiler does
+// with it is pinned in tests/api/test_userscripts.py.
+test("the source carries no token, so no credentials are sent to a server with the gate off", () => {
+  const GM_getValue = (_key, fallback) => fallback;
+  const { SERVER_AUTH, DEFAULT_TOKEN } = loadModules(["config.js"], ["SERVER_AUTH", "DEFAULT_TOKEN"], {
+    GM_getValue,
+  });
+  assert.equal(DEFAULT_TOKEN, "");
+  assert.equal(SERVER_AUTH, "");
 });

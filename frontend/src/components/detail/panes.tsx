@@ -48,6 +48,7 @@ import {
   type LoreEntry,
 } from '@/lib/card'
 import { setDialogue, setField, setGreetings } from '@/lib/card-edit'
+import { copyText } from '@/lib/clipboard'
 import { groupExpressions } from '@/lib/expressions'
 import { cn } from '@/lib/utils'
 import { CreatorNotes } from './CreatorNotes'
@@ -944,9 +945,11 @@ function CopyJsonButton({ data }: { data: unknown }) {
     <button
       type="button"
       onClick={() => {
-        void navigator.clipboard.writeText(JSON.stringify(data, null, 2))
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        void copyText(JSON.stringify(data, null, 2)).then((ok) => {
+          if (!ok) return toast('Could not copy to the clipboard.', 'bad')
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        })
       }}
       className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] text-muted hover:text-text"
     >
