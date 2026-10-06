@@ -70,7 +70,11 @@ in there.
 
 **[docs/DEPLOY.md](docs/DEPLOY.md)** is the runbook: publishing, making the GHCR
 package public, seeding the mount, and repointing the userscripts. Note that the
-archive has **no authentication** — keep it on the LAN.
+archive has **no authentication** by default — keep it on the LAN. Settings →
+Security can put a single username and password in front of the whole server
+(the userscripts then need `GM_setValue("serverLogin", "user:password")`); it
+is a gate for a shared LAN, sent over plain http, not a reason to expose the
+server. Locked out: delete `data/security.json`.
 
 The maintenance scripts (`make import` / `check` / `names` / `thumbs` /
 `gallery-ids`) stay on the host and run against the same `./data`. They are not

@@ -6,6 +6,7 @@ import {
   MaintenanceSection,
   MediaSection,
   ProvidersSection,
+  SecuritySection,
   UserscriptsSection,
 } from '@/components/settings/sections'
 import { SettingsNav } from '@/components/settings/controls'
@@ -20,13 +21,15 @@ const SECTIONS: Record<SectionKey, React.ComponentType> = {
   providers: ProvidersSection,
   media: MediaSection,
   userscripts: UserscriptsSection,
+  security: SecuritySection,
   maintenance: MaintenanceSection,
 }
 
 /**
  * Settings (docs/UI_REWRITE_PLAN.md §4.5, Stage 6) — no server changes: every
  * section reads/writes the same `/api/v1/settings`, `/stats`, `/proxy/status`,
- * `/userscripts` and `/refresh` routes that already existed.
+ * `/userscripts` and `/refresh` routes that already existed. **Security** is
+ * the one exception, added later with routes of its own (`/api/v1/security`).
  *
  * Dropped from the mock's seven-item nav: **Media** (its rows — "download on
  * import", "images only", "concurrent downloads" — describe fixed server

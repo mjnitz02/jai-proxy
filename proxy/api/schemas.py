@@ -825,3 +825,29 @@ class UserscriptOut(BaseModel):
     filename: str
     source: str
     bytes: int
+
+
+class SessionOut(BaseModel):
+    """Where a client stands with the login gate."""
+
+    enabled: bool = Field(description="Whether the server requires a login at all.")
+    authenticated: bool = Field(description="Whether this client may use the API. Always true when the gate is off.")
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class SecurityOut(BaseModel):
+    """The login gate's settings. The password is write-only."""
+
+    enabled: bool
+    username: str
+    has_password: bool
+
+
+class SecurityIn(BaseModel):
+    enabled: bool
+    username: str = ""
+    password: str | None = Field(None, description="Omit or leave empty to keep the current password.")

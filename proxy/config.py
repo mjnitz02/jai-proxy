@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     # job is to grow, and settings.json is rewritten whole on every save with
     # the provider tokens riding along. See proxy/state/ignored.py.
     ignored_file: Path = ROOT / "data" / "ignored.json"
+    # The login gate: on/off, the username, a password hash, and the secret
+    # that signs session cookies. Off when the file is absent, so deleting it is
+    # the way back in from a forgotten password. Its own file rather than a
+    # settings key because the settings blob is served whole to the browser and
+    # replaced whole by it. See proxy/state/security.py.
+    security_file: Path = ROOT / "data" / "security.json"
 
     # Server-side working state, kept beside the archive rather than inside it:
     # `data/` is the one directory that has to be mounted (and backed up), and

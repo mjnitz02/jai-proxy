@@ -9,7 +9,7 @@ const { loadModules, plain } = require("./helpers/load-src");
 // seeded rather than loaded: it lives in config.js now (it is persisted, since
 // the server can be remote), and these tests are about the request shape, not
 // about where it is addressed -- see config.server-url.test.js for that.
-function load(respond) {
+function load(respond, auth = "") {
   const calls = [];
   const GM_xmlhttpRequest = (opts) => {
     calls.push(opts);
@@ -18,6 +18,7 @@ function load(respond) {
   const { ServerClient } = loadModules(["client-server.js"], ["ServerClient"], {
     GM_xmlhttpRequest,
     SERVER: "http://127.0.0.1:8000",
+    SERVER_AUTH: auth,
   });
   return { ServerClient, calls };
 }
@@ -92,4 +93,21 @@ test("_request rejects on a transport error", async () => {
 test("_request rejects on timeout", async () => {
   const { ServerClient } = load((opts) => opts.ontimeout());
   await assert.rejects(ServerClient.health(), /timeout/);
+});
+
+test("no Authorization header is sent unless a login is configured", async () => {
+  const { ServerClient, calls } = load((opts) => {
+    opts.onload({ status: 200, responseText: "{}" });
+  });
+  await ServerClient.health();
+  assert.equal("Authorization" in calls[0].headers, false);
+});
+
+test("a configured login rides on every request, for a server with its gate on", async () => {
+  const { ServerClient, calls } = load((opts) => {
+    opts.onload({ status: 200, responseText: JSON.stringify({ existing: [] }) });
+  }, "Basic bWF0dDpodW50ZXIy");
+  await ServerClient.existing(["a"]);
+  assert.equal(calls[0].headers.Authorization, "Basic bWF0dDpodW50ZXIy");
+  assert.equal(calls[0].headers["Content-Type"], "application/json");
 });

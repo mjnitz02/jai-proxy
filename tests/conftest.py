@@ -133,6 +133,11 @@ def archive_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, P
     # browsing, with nothing in the UI to undo it.
     dirs["ignored"] = tmp_path / "ignored.json"
     monkeypatch.setattr(settings, "ignored_file", dirs["ignored"])
+    # And for the login gate, where the stakes are the other way round: a test
+    # that enabled it against the real file would lock the developer out of
+    # their own archive behind a password only the test knew.
+    dirs["security"] = tmp_path / "security.json"
+    monkeypatch.setattr(settings, "security_file", dirs["security"])
     # The index and the thumbnail store are process-wide singletons bound at
     # import time; both have to be re-pointed or a test reads the real 3 GB
     # archive on the developer's machine and passes for the wrong reason.
