@@ -3,7 +3,8 @@
 `/auth/*` is what a visitor uses: is the gate on, log in, log out. Those three
 are the only API routes answerable without credentials (`proxy.api.gate`).
 `/security` is what Settings -> Security uses to configure the gate, and sits
-behind it like everything else.
+behind it like everything else -- including `/security/token`, which issues and
+revokes the API token the userscripts carry.
 
 Plain `def` handlers like the rest of `/api/v1`: a login runs scrypt, which
 belongs in the threadpool.
@@ -40,6 +41,7 @@ def _security_out() -> SecurityOut:
         enabled=config.enabled,
         username=config.username,
         has_password=bool(config.password_hash),
+        api_token=config.api_token or None,
     )
 
 
@@ -88,3 +90,24 @@ def put_security(body: SecurityIn, response: Response) -> SecurityOut:
     else:
         response.delete_cookie(gate.COOKIE, path="/")
     return _security_out()
+
+
+def _change_token(*, revoke: bool) -> SecurityOut:
+    try:
+        security.store().set_api_token(revoke=revoke)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"could not save: {exc}") from exc
+    return _security_out()
+
+
+@router.post("/security/token", response_model=SecurityOut, summary="Generate the API token, replacing any current one")
+def generate_token() -> SecurityOut:
+    """A token that passes the gate as `Authorization: Bearer <token>`, exactly
+    as a login would. Generated userscripts carry it (Settings -> Userscripts),
+    so regenerating means reinstalling them."""
+    return _change_token(revoke=False)
+
+
+@router.delete("/security/token", response_model=SecurityOut, summary="Revoke the API token")
+def revoke_token() -> SecurityOut:
+    return _change_token(revoke=True)

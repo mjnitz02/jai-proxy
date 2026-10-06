@@ -137,3 +137,20 @@ def test_a_bad_url_is_the_users_mistake_not_a_server_error(client):
 
 def test_unknown_key_404s(client):
     assert client.post("/api/v1/userscripts/nope", json={}).status_code == 404
+
+
+def test_api_token_is_substituted_in_both_bridges():
+    """The login gate's token (Settings -> Security) -- the one constant that is
+    not the user's to type."""
+    for key in userscripts.SPECS:
+        source = userscripts.compile_userscript(key, api_token="jai_abc-DEF_123")
+        assert 'const DEFAULT_TOKEN = "jai_abc-DEF_123";' in source
+        assert "API token included" in source
+    assert 'const DEFAULT_TOKEN = "";' in compiled(server_url="http://nas:8000")
+    assert "API token included" not in compiled(server_url="http://nas:8000")
+
+
+def test_a_token_that_could_break_out_of_the_string_is_refused():
+    """security.json can be hand-edited, and this lands in JavaScript source."""
+    with pytest.raises(userscripts.UserscriptError):
+        compiled(api_token='x"; alert(1); "')

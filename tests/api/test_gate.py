@@ -36,7 +36,12 @@ def gated(client):
 def test_off_by_default(client):
     assert client.get("/api/v1/auth/session").json() == {"enabled": False, "authenticated": True}
     assert client.get("/api/v1/characters").status_code == 200
-    assert client.get("/api/v1/security").json() == {"enabled": False, "username": "", "has_password": False}
+    assert client.get("/api/v1/security").json() == {
+        "enabled": False,
+        "username": "",
+        "has_password": False,
+        "api_token": None,
+    }
 
 
 def test_enabling_needs_a_username_and_a_password(client):
@@ -107,8 +112,66 @@ def test_login_opens_the_gate_and_logout_closes_it(gated):
     assert gated.get("/api/v1/characters").status_code == 401
 
 
-def test_basic_auth_is_accepted_for_clients_without_a_cookie(gated):
+def _bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _issue_token(gated) -> str:
+    """Generate the API token the way Settings -> Security does, then drop the
+    session so only the token is left to open the gate."""
+    gated.post("/api/v1/auth/login", json=CREDS)
+    token = gated.post("/api/v1/security/token").json()["api_token"]
+    gated.cookies.clear()
+    return token
+
+
+def test_the_api_token_opens_the_gate_like_a_login(gated):
     """The userscripts' way in."""
+    assert gated.post("/api/v1/security/token").status_code == 401  # issuing one is itself gated
+    token = _issue_token(gated)
+    assert token.startswith("jai_")
+
+    assert gated.post("/existing", json={"ids": []}, headers=_bearer(token)).status_code == 200
+    assert gated.get("/api/v1/characters", headers=_bearer(token)).status_code == 200
+    assert gated.get("/api/v1/security", headers=_bearer(token)).json()["api_token"] == token
+    assert gated.post("/existing", json={"ids": []}, headers=_bearer(token + "x")).status_code == 401
+    assert gated.post("/existing", json={"ids": []}, headers=_bearer("")).status_code == 401
+
+
+def test_regenerating_or_revoking_the_token_ends_the_old_one(gated):
+    first = _issue_token(gated)
+    second = _issue_token(gated)
+    assert second != first
+    assert gated.post("/existing", json={"ids": []}, headers=_bearer(first)).status_code == 401
+    assert gated.post("/existing", json={"ids": []}, headers=_bearer(second)).status_code == 200
+
+    assert gated.delete("/api/v1/security/token", headers=_bearer(second)).json()["api_token"] is None
+    assert gated.post("/existing", json={"ids": []}, headers=_bearer(second)).status_code == 401
+
+
+def test_the_token_outlives_a_password_change_and_leaves_sessions_alone(gated):
+    """A new password must not mean reinstalling two userscripts, and issuing a
+    token must not log the browser that asked for it out."""
+    gated.post("/api/v1/auth/login", json=CREDS)
+    token = gated.post("/api/v1/security/token").json()["api_token"]
+    assert gated.get("/api/v1/characters").status_code == 200  # same session, still good
+
+    gated.put("/api/v1/security", json={"enabled": True, "username": "matt", "password": "new one"})
+    gated.cookies.clear()
+    assert gated.post("/existing", json={"ids": []}, headers=_bearer(token)).status_code == 200
+
+
+def test_a_generated_userscript_carries_the_token(gated):
+    token = _issue_token(gated)
+    body = gated.post(
+        "/api/v1/userscripts/jai", json={"server_url": "http://nas:8000"}, headers=_bearer(token)
+    ).json()
+    assert body["includes_token"] is True
+    assert f'const DEFAULT_TOKEN = "{token}";' in body["source"]
+
+
+def test_basic_auth_is_accepted_for_clients_without_a_cookie(gated):
+    """Anything scripted that would rather send the credentials themselves."""
     assert gated.post("/existing", json={"ids": []}, headers=_basic(**CREDS)).status_code == 200
     assert gated.post("/existing", json={"ids": []}, headers=_basic("matt", "wrong")).status_code == 401
     assert gated.post("/existing", json={"ids": []}, headers={"Authorization": "Basic !!!"}).status_code == 401
@@ -139,7 +202,7 @@ def test_saving_without_a_password_keeps_the_current_one(gated):
 def test_disabling_reopens_the_server_and_keeps_the_credentials(gated):
     gated.post("/api/v1/auth/login", json=CREDS)
     response = gated.put("/api/v1/security", json={"enabled": False, "username": "matt"})
-    assert response.json() == {"enabled": False, "username": "matt", "has_password": True}
+    assert response.json() == {"enabled": False, "username": "matt", "has_password": True, "api_token": None}
     gated.cookies.clear()
     assert gated.get("/api/v1/characters").status_code == 200
 

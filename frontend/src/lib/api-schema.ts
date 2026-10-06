@@ -1371,6 +1371,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/security/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate the API token, replacing any current one
+         * @description A token that passes the gate as `Authorization: Bearer <token>`, exactly
+         *     as a login would. Generated userscripts carry it (Settings -> Userscripts),
+         *     so regenerating means reinstalling them.
+         */
+        post: operations["generate_token_api_v1_security_token_post"];
+        /** Revoke the API token */
+        delete: operations["revoke_token_api_v1_security_token_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/datacat/health": {
         parameters: {
             query?: never;
@@ -3465,6 +3488,11 @@ export interface components {
             username: string;
             /** Has Password */
             has_password: boolean;
+            /**
+             * Api Token
+             * @description The token the userscripts send instead of logging in, if one has been generated.
+             */
+            api_token?: string | null;
         };
         /**
          * SessionOut
@@ -3599,6 +3627,12 @@ export interface components {
             source: string;
             /** Bytes */
             bytes: number;
+            /**
+             * Includes Token
+             * @description Whether the login gate's API token was baked in (Settings -> Security).
+             * @default false
+             */
+            includes_token: boolean;
         };
         /**
          * UserscriptRequest
@@ -5607,6 +5641,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_token_api_v1_security_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityOut"];
+                };
+            };
+        };
+    };
+    revoke_token_api_v1_security_token_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityOut"];
                 };
             };
         };

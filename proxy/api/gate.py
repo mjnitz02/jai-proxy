@@ -1,9 +1,11 @@
 """The login gate: one check in front of every route the server answers.
 
 Off unless Settings -> Security has switched it on (`proxy.state.security`), in
-which case a request has to carry either the session cookie a login hands out or
-the same username and password as HTTP Basic. The second is for the clients that
-cannot hold a cookie: the two userscripts, which post from another site's page.
+which case a request has to carry the session cookie a login hands out, the API
+token as `Authorization: Bearer`, or the username and password as HTTP Basic.
+The token is for the clients that cannot hold a cookie: the two userscripts,
+which post from another site's page and get it baked in when Settings ->
+Userscripts generates them.
 
 WHAT IS NOT GATED
 The browser client's own files. The shell and its hashed assets hold no archive
@@ -58,7 +60,7 @@ def is_authenticated(connection: HTTPConnection) -> bool:
     if token and store.check_session(token):
         return True
     header = connection.headers.get("authorization")
-    return bool(header) and store.check_basic(header)
+    return bool(header) and (store.check_token(header) or store.check_basic(header))
 
 
 class GateMiddleware:
