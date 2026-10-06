@@ -12,6 +12,29 @@ export const apiClient = createClient<paths>({
   fetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args),
 })
 
+/**
+ * Fired on `window` when an API call comes back 401 — the login gate
+ * (`proxy/api/gate.py`) is on and this browser's session is gone. `AuthGate`
+ * listens and swaps the app for the login screen.
+ *
+ * An event rather than a query-client call so this module stays free of React:
+ * it is imported by code that has no client to hand.
+ */
+export const UNAUTHORIZED_EVENT = 'jai-proxy:unauthorized'
+
+apiClient.use({
+  onResponse({ request, response }) {
+    // The auth routes' own 401 is "wrong password", which the login form shows
+    // itself.
+    if (
+      response.status === 401 &&
+      !new URL(request.url).pathname.startsWith('/api/v1/auth/')
+    ) {
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+    }
+  },
+})
+
 /** What every `apiClient` call resolves to: one of `data`/`error`, and the response. */
 type ApiResult<T> = {
   data?: T

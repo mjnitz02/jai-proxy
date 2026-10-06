@@ -29,6 +29,7 @@ from proxy.api.capture import router as capture_router
 from proxy.api.chat import router as chat_router
 from proxy.api.cors_proxy import router as cors_proxy_router
 from proxy.api.datacat import router as datacat_router
+from proxy.api.gate import GateMiddleware
 from proxy.api.v1 import _shared as v1_shared
 from proxy.config import REQUIRED_DIRS, ROOT, STARTUP_DIR_ERRORS, settings
 from proxy.runtime import dashboard as dashboard_mod
@@ -85,6 +86,41 @@ ROUTERS = (
 
 for _router in ROUTERS:
     app.include_router(_router)
+
+
+def _server_owned_prefixes() -> frozenset[str]:
+    """The first path segment of every route the server answers itself.
+
+    The catch-all at the bottom of this module returns the client shell for
+    anything unmatched, which is what makes deep links work -- and would also
+    turn a mistyped
+    `/api/v1/charcters` into a 200 with an HTML body, where the client's JSON
+    parser reports something unrecognisable instead of "no such route". So the
+    handler 404s inside these prefixes rather than answering for them.
+
+    The login gate uses the same set as "everything that needs a login" -- the
+    client's own files are what is left over, and are what serves the login
+    screen.
+
+    Derived from `ROUTERS` rather than written out, so adding a router is enough
+    to protect it; the three FastAPI adds for itself are the only literals.
+    """
+    prefixes = {"docs", "redoc", "openapi.json"}
+    for router in ROUTERS:
+        for route in router.routes:
+            path = getattr(route, "path", "")
+            if path.startswith("/") and path != "/":
+                prefixes.add(path.lstrip("/").split("/", 1)[0])
+    return frozenset(prefixes)
+
+
+SERVER_OWNED_PREFIXES = _server_owned_prefixes()
+
+# The login gate (Settings -> Security), off by default. Added first so it is
+# the innermost of the three: CORS answers preflights before the gate sees them
+# and puts its headers on the gate's 401, so a cross-origin page reads that
+# status rather than an opaque network error.
+app.add_middleware(GateMiddleware, protected=SERVER_OWNED_PREFIXES)
 
 app.add_middleware(
     CORSMiddleware,
@@ -146,29 +182,6 @@ class ImmutableStaticFiles(StaticFiles):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
 
-
-def _server_owned_prefixes() -> frozenset[str]:
-    """The first path segment of every route the server answers itself.
-
-    The catch-all below returns the client shell for anything unmatched, which
-    is what makes deep links work -- and would also turn a mistyped
-    `/api/v1/charcters` into a 200 with an HTML body, where the client's JSON
-    parser reports something unrecognisable instead of "no such route". So the
-    handler 404s inside these prefixes rather than answering for them.
-
-    Derived from `ROUTERS` rather than written out, so adding a router is enough
-    to protect it; the three FastAPI adds for itself are the only literals.
-    """
-    prefixes = {"docs", "redoc", "openapi.json"}
-    for router in ROUTERS:
-        for route in router.routes:
-            path = getattr(route, "path", "")
-            if path.startswith("/") and path != "/":
-                prefixes.add(path.lstrip("/").split("/", 1)[0])
-    return frozenset(prefixes)
-
-
-SERVER_OWNED_PREFIXES = _server_owned_prefixes()
 
 if FRONTEND_DIST.is_dir():
     app.mount(

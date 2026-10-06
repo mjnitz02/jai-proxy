@@ -7,6 +7,7 @@ export const SETTINGS_SECTIONS = [
   { key: 'providers', label: 'Providers' },
   { key: 'media', label: 'Media' },
   { key: 'userscripts', label: 'Userscripts' },
+  { key: 'security', label: 'Security' },
   { key: 'maintenance', label: 'Maintenance' },
 ] as const
 

@@ -6,6 +6,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  LogOut,
   Plus,
   RefreshCw,
   Trash2,
@@ -18,6 +19,7 @@ import {
   useCancelMediaJob,
   useMediaJob,
 } from '@/hooks/use-bulk-media'
+import { useLogout, useSecurity, useUpdateSecurity } from '@/hooks/use-auth'
 import { useArchiveStats } from '@/hooks/use-characters'
 import { useDatacatFollows } from '@/hooks/use-discover'
 import {
@@ -44,6 +46,144 @@ import {
   Stat,
   Toggle,
 } from './controls'
+
+// ---- Security ---------------------------------------------------------------
+
+/**
+ * The login gate (`proxy/api/gate.py`): one username and password in front of
+ * the whole server. Not accounts — there is one set of credentials and no
+ * notion of who is logged in beyond "someone who knew them".
+ *
+ * Unlike every other section this one has an explicit Save and does not write
+ * as you type: a half-typed password must never become the password, and
+ * switching the gate on is only valid together with the credentials that open
+ * it. The password field is write-only — the server keeps a hash and has
+ * nothing to show — so blank means "leave it as it is".
+ */
+export function SecuritySection() {
+  const security = useSecurity()
+  const save = useUpdateSecurity()
+  const logout = useLogout()
+  const stored = security.data
+
+  const [enabledDraft, setEnabledDraft] = useState<boolean | null>(null)
+  const [usernameDraft, setUsernameDraft] = useState<string | null>(null)
+  const [password, setPassword] = useState('')
+
+  const enabled = enabledDraft ?? stored?.enabled ?? false
+  const username = usernameDraft ?? stored?.username ?? ''
+  const hasPassword = Boolean(password) || Boolean(stored?.has_password)
+  const dirty =
+    enabled !== (stored?.enabled ?? false) ||
+    username.trim() !== (stored?.username ?? '') ||
+    Boolean(password)
+  const incomplete = enabled && !(username.trim() && hasPassword)
+
+  const field =
+    'h-[31px] w-[220px] rounded-lg border border-line bg-raised px-2.5 text-[12.5px] text-text outline-none focus:border-sage'
+
+  return (
+    <SettingsSection
+      title="Security"
+      lede="A login in front of the archive. Off by default."
+    >
+      <OptionRow
+        label="Require login"
+        hint="Covers the whole server — this app, the API and the userscript endpoints."
+      >
+        <Toggle
+          on={enabled}
+          onChange={setEnabledDraft}
+          disabled={!stored || save.isPending}
+        />
+      </OptionRow>
+      <OptionRow label="Username">
+        <input
+          value={username}
+          onChange={(e) => setUsernameDraft(e.target.value)}
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          className={field}
+        />
+      </OptionRow>
+      <OptionRow
+        label="Password"
+        hint={
+          stored?.has_password
+            ? 'Leave blank to keep the current password.'
+            : 'Not set.'
+        }
+      >
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={stored?.has_password ? 'unchanged' : 'not set'}
+          autoComplete="new-password"
+          className={field}
+        />
+      </OptionRow>
+      <div className="py-[13px]">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!stored || !dirty || incomplete || save.isPending}
+            onClick={() =>
+              save.mutate(
+                { enabled, username, password: password || null },
+                {
+                  onSuccess: (saved) => {
+                    toast(
+                      saved.enabled ? 'Login required.' : 'Login not required.',
+                    )
+                    setEnabledDraft(null)
+                    setUsernameDraft(null)
+                    setPassword('')
+                  },
+                  onError: (err) => toast(err.message, 'bad'),
+                },
+              )
+            }
+            className="flex h-[31px] items-center gap-1.5 rounded-lg border border-sage-line bg-sage-dim px-3 text-[12.5px] text-sage hover:bg-sage-dim/70 disabled:opacity-50"
+          >
+            <Check className="size-3.5" />
+            Save
+          </button>
+          {stored?.enabled && (
+            <button
+              type="button"
+              disabled={logout.isPending}
+              onClick={() =>
+                logout.mutate(undefined, {
+                  // A reload rather than a state flip: it drops everything the
+                  // session had on screen and lands on the login screen.
+                  onSuccess: () => window.location.reload(),
+                  onError: (err) => toast(err.message, 'bad'),
+                })
+              }
+              className="flex h-[31px] items-center gap-1.5 rounded-lg border border-line px-3 text-[12.5px] text-muted hover:border-white/20 hover:text-text"
+            >
+              <LogOut className="size-3.5" />
+              Log out
+            </button>
+          )}
+          {incomplete && (
+            <span className="text-[11.5px] text-faint">
+              Set a username and a password to enable login.
+            </span>
+          )}
+        </div>
+        <p className="mt-2.5 text-[11.5px] text-faint">
+          Saving new credentials logs out every other browser. The userscripts
+          need the same credentials once this is on — see the note at the top of
+          each script. Locked out? Delete{' '}
+          <span className="font-mono">data/security.json</span> on the server.
+        </p>
+      </div>
+    </SettingsSection>
+  )
+}
 
 // ---- Library ----------------------------------------------------------------
 

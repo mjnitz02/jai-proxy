@@ -10,7 +10,9 @@
         GM_xmlhttpRequest({
           method: opts.method || "GET",
           url: SERVER + opts.path,
-          headers: { "Content-Type": "application/json" },
+          headers: SERVER_AUTH
+            ? { "Content-Type": "application/json", Authorization: SERVER_AUTH }
+            : { "Content-Type": "application/json" },
           data: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
           timeout: opts.timeout || 15000,
           onload: (r) => {

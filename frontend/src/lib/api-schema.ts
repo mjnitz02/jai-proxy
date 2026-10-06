@@ -1298,6 +1298,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Is login required, and is this client logged in */
+        get: operations["session_api_v1_auth_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Log in */
+        post: operations["login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Log out */
+        post: operations["logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/security": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The login gate's settings */
+        get: operations["get_security_api_v1_security_get"];
+        /**
+         * Change the login gate's settings
+         * @description Store the gate's settings. Omit `password` (or send it empty) to keep the
+         *     current one; the password itself is never stored or returned.
+         */
+        put: operations["put_security_api_v1_security_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/datacat/health": {
         parameters: {
             query?: never;
@@ -2855,6 +2928,13 @@ export interface components {
             /** Seconds */
             seconds: number;
         };
+        /** LoginIn */
+        LoginIn: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
+        };
         /** LorebookExistingRequest */
         LorebookExistingRequest: {
             /** Source */
@@ -3358,6 +3438,49 @@ export interface components {
             avatar_url?: string | null;
             /** Avatar B64 */
             avatar_b64?: string | null;
+        };
+        /** SecurityIn */
+        SecurityIn: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+            /**
+             * Password
+             * @description Omit or leave empty to keep the current password.
+             */
+            password?: string | null;
+        };
+        /**
+         * SecurityOut
+         * @description The login gate's settings. The password is write-only.
+         */
+        SecurityOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Username */
+            username: string;
+            /** Has Password */
+            has_password: boolean;
+        };
+        /**
+         * SessionOut
+         * @description Where a client stands with the login gate.
+         */
+        SessionOut: {
+            /**
+             * Enabled
+             * @description Whether the server requires a login at all.
+             */
+            enabled: boolean;
+            /**
+             * Authenticated
+             * @description Whether this client may use the API. Always true when the gate is off.
+             */
+            authenticated: boolean;
         };
         /**
          * StatsOut
@@ -5360,6 +5483,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DuplicatesOut"];
+                };
+            };
+        };
+    };
+    session_api_v1_auth_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+        };
+    };
+    login_api_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_api_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_security_api_v1_security_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityOut"];
+                };
+            };
+        };
+    };
+    put_security_api_v1_security_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecurityIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
