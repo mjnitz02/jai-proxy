@@ -72,7 +72,7 @@ describe('CharactersPage', () => {
 
     renderApp(<CharactersPage />)
 
-    expect(await screen.findByText('Abbie')).toBeInTheDocument()
+    expect((await screen.findAllByText('Abbie')).length).toBeGreaterThan(0)
     expect(await screen.findByText('2 of 3,868')).toBeInTheDocument()
   })
 
@@ -85,7 +85,7 @@ describe('CharactersPage', () => {
     )
 
     renderApp(<CharactersPage />)
-    await screen.findByText('Abbie')
+    await screen.findAllByText('Abbie')
     await userEvent.click(screen.getByRole('button', { name: 'Lorebook' }))
 
     await waitFor(() => {
@@ -105,7 +105,7 @@ describe('CharactersPage', () => {
     )
 
     renderApp(<CharactersPage />)
-    await screen.findByText('Abbie')
+    await screen.findAllByText('Abbie')
     await userEvent.click(
       screen.getByRole('button', { name: 'Filter by source' }),
     )
@@ -128,7 +128,7 @@ describe('CharactersPage', () => {
     )
 
     renderApp(<CharactersPage />)
-    await screen.findByText('Abbie')
+    await screen.findAllByText('Abbie')
     await userEvent.click(
       screen.getByRole('button', { name: 'Filter by creator' }),
     )
@@ -187,7 +187,7 @@ describe('CharactersPage', () => {
 
     renderApp(<CharactersPage />)
 
-    expect(await screen.findByText('Abbie')).toBeInTheDocument()
+    expect((await screen.findAllByText('Abbie')).length).toBeGreaterThan(0)
     await userEvent.click(screen.getByRole('button', { name: /Characters/ }))
 
     // The shelf sits above the grid and shows the same cards, so both
@@ -223,7 +223,7 @@ describe('CharactersPage', () => {
     )
 
     renderApp(<CharactersPage />)
-    await screen.findByText('Card 0')
+    await screen.findAllByText('Card 0')
     // The first page and nothing more: paging is driven by the viewport, not
     // by mounting the grid.
     expect(pageOffsets(queries)).toEqual(['0'])
@@ -243,7 +243,7 @@ describe('CharactersPage', () => {
     )
 
     renderApp(<CharactersPage />)
-    await screen.findByText('Abbie')
+    await screen.findAllByText('Abbie')
 
     // Two cards, a total of two: there is no next page, so a sentinel that
     // scrolls into view must not ask for one.
